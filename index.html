@@ -19,6 +19,12 @@
         </div>
 
         <div class="tower-actions">
+          <div class="speed-toggle" role="group" aria-label="Simulation speed">
+            <span class="tile-label">Sim speed</span>
+            <button class="speed-button" type="button" data-speed="1" aria-pressed="false">1x</button>
+            <button class="speed-button" type="button" data-speed="10" aria-pressed="true">10x</button>
+            <button class="speed-button" type="button" data-speed="60" aria-pressed="false">60x</button>
+          </div>
           <button id="focusButton" class="ghost-button" type="button">Clear the skies</button>
         </div>
       </header>
@@ -36,35 +42,81 @@
           <span class="tile-label">Landed today</span>
           <strong id="landedToday">0</strong>
         </div>
+        <div class="status-tile">
+          <span class="tile-label">Streak</span>
+          <strong id="streakStat">0</strong>
+        </div>
       </section>
 
       <main class="radar-layout">
         <section class="radar-panel">
-          <div class="radar-grid" aria-label="Air traffic radar board">
+          <div class="radar-toolbar">
+            <span class="tile-label">Radar <span id="simClock" class="sim-clock">T+0:00</span></span>
+            <span id="weatherSummary" class="tile-label weather-summary"></span>
+          </div>
+
+          <div id="radarGrid" class="radar-grid" aria-label="Air traffic radar board">
             <div class="radar-sweep" aria-hidden="true"></div>
             <div class="radar-ring ring-1"></div>
             <div class="radar-ring ring-2"></div>
             <div class="radar-ring ring-3"></div>
             <div class="radar-ring ring-4"></div>
             <div class="radar-crosshair"></div>
-            <div id="planeLayer" class="plane-layer" aria-live="polite"></div>
+            <div class="runway" aria-hidden="true">
+              <span class="runway-number runway-number--a">09</span>
+              <span class="runway-number runway-number--b">27</span>
+            </div>
+            <div id="stormLayer" class="storm-layer" aria-hidden="true"></div>
+            <div id="planeLayer" class="plane-layer" aria-label="Planes waiting for approval"></div>
 
-            <div class="focus-panel hidden" id="focusPanel" aria-live="polite">
-              <div class="focus-header">
-                <div>
-                  <p class="eyebrow">Focus mode</p>
-                  <h2>Clear the skies</h2>
-                </div>
-                <button id="nextFocusButton" class="primary-button" type="button">Next low-fuel plane</button>
+            <div id="finishCard" class="finish-card hidden" role="dialog" aria-labelledby="finishTitle">
+              <p class="eyebrow">Shift complete</p>
+              <h2 id="finishTitle">Skies cleared</h2>
+              <p id="finishStats" class="finish-stats"></p>
+              <div class="finish-actions">
+                <button id="restartButton" class="primary-button" type="button">Run it again <kbd>R</kbd></button>
+                <button id="closeFinishButton" class="ghost-button" type="button">Close</button>
               </div>
-              <div id="focusCard" class="focus-card"></div>
             </div>
           </div>
+
+          <div class="landed-strip">
+            <span class="tile-label">On the ground</span>
+            <div id="landedRow" class="landed-chips"></div>
+          </div>
+
+          <section class="radio-panel" aria-label="Tower radio log">
+            <div class="radio-header">
+              <h2>Tower radio</h2>
+              <span class="tile-label">Last 30 calls</span>
+            </div>
+            <ol id="radioLog" class="radio-log" aria-live="polite"></ol>
+          </section>
         </section>
 
-        <aside class="detail-panel" aria-live="polite">
-          <div id="detailCard" class="detail-card">
-            <p class="detail-empty">Select a plane to review the request.</p>
+        <aside class="side-column">
+          <section class="focus-panel hidden" id="focusPanel" aria-label="Focus mode">
+            <div class="focus-header">
+              <div>
+                <p class="eyebrow">Focus mode &middot; landing run</p>
+                <h2>Clear the skies</h2>
+              </div>
+              <div class="run-meta">
+                <span id="runTimer" class="run-timer">0:00</span>
+                <span id="streakBadge" class="streak-badge">Streak 0</span>
+              </div>
+            </div>
+            <div id="focusCard" class="focus-card"></div>
+            <div class="focus-footer">
+              <p class="key-hints"><kbd>L</kbd> land <kbd>S</kbd> send around <kbd>H</kbd> hold <kbd>Esc</kbd> exit</p>
+              <button id="nextFocusButton" class="secondary-button" type="button">Next low-fuel plane <kbd>N</kbd></button>
+            </div>
+          </section>
+
+          <div class="detail-panel">
+            <div id="detailCard" class="detail-card">
+              <p class="detail-empty">Select a plane to review the request.</p>
+            </div>
           </div>
         </aside>
       </main>

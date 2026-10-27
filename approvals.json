@@ -6,7 +6,7 @@
     "agent": "Mila",
     "repo": "Personal ops",
     "needs": "approval to send",
-    "sentAt": "2026-10-27T09:45:00-07:00",
+    "minutesAgo": 1140,
     "status": "waiting",
     "risk": "The tone is a bit too casual for enterprise accounts and should be reviewed before sending.",
     "summary": "Email recap to customers after the pilot launch."
@@ -18,7 +18,7 @@
     "agent": "Proxy",
     "repo": "Marketing sync",
     "needs": "approval to publish",
-    "sentAt": "2026-10-27T14:20:00-07:00",
+    "minutesAgo": 480,
     "status": "waiting",
     "risk": "The CTA is slightly too promotional for the current audience, but the message is otherwise strong.",
     "summary": "LinkedIn post for the new AI triage rollout."
@@ -30,9 +30,42 @@
     "agent": "Nico",
     "repo": "Strategy desk",
     "needs": "approval before sharing",
-    "sentAt": "2026-10-27T17:10:00-07:00",
+    "minutesAgo": 180,
     "status": "waiting",
     "risk": "The discount language needs a quick pass before the memo is shared with an external audience.",
     "summary": "Recommended pricing structure for the enterprise package."
+  },
+  {
+    "id": "pr-482",
+    "title": "Refine agent handoff prompts",
+    "type": "pr",
+    "agent": "Copilot",
+    "repo": "matchday-intelligence",
+    "needs": "approve merge",
+    "minutesAgo": 120,
+    "status": "waiting",
+    "risk": "Good prompt quality, but it changes a high-signal workflow; keep an eye on latency regressions."
+  },
+  {
+    "id": "pr-219",
+    "title": "Add dependency update checks",
+    "type": "pr",
+    "agent": "Dependabot",
+    "repo": "demo-sandbox",
+    "needs": "security review",
+    "minutesAgo": 420,
+    "status": "waiting",
+    "risk": "This is a low-risk library bump, but the package lockfile change needs a quick sanity check."
+  },
+  {
+    "id": "pr-314",
+    "title": "Fix onboarding analytics report",
+    "type": "pr",
+    "agent": "Pine",
+    "repo": "sample-admin-tools",
+    "needs": "approve rollout",
+    "minutesAgo": 660,
+    "status": "waiting",
+    "risk": "Operationally safe, but the data export is in a shared pipeline and should be validated before release."
   }
 ]

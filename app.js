@@ -309,6 +309,11 @@ function renderDetail() {
   const actionRow = document.createElement('div');
   actionRow.className = 'action-row';
 
+  const noteInput = document.createElement('textarea');
+  noteInput.className = 'input-note';
+  noteInput.id = 'decisionNote';
+  noteInput.placeholder = 'Add a short decision note for the agent...';
+
   function createActionButton(action, label, className) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -321,11 +326,6 @@ function renderDetail() {
     });
     return button;
   }
-
-  const noteInput = document.createElement('textarea');
-  noteInput.className = 'input-note';
-  noteInput.id = 'decisionNote';
-  noteInput.placeholder = 'Add a short decision note for the agent...';
 
   actionRow.appendChild(createActionButton('land', 'Land it', 'primary-button'));
   actionRow.appendChild(createActionButton('change', 'Send around', 'secondary-button'));

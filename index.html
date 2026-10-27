@@ -48,6 +48,17 @@
             <div class="radar-ring ring-4"></div>
             <div class="radar-crosshair"></div>
             <div id="planeLayer" class="plane-layer" aria-live="polite"></div>
+
+            <div class="focus-panel hidden" id="focusPanel" aria-live="polite">
+              <div class="focus-header">
+                <div>
+                  <p class="eyebrow">Focus mode</p>
+                  <h2>Clear the skies</h2>
+                </div>
+                <button id="nextFocusButton" class="primary-button" type="button">Next low-fuel plane</button>
+              </div>
+              <div id="focusCard" class="focus-card"></div>
+            </div>
           </div>
         </section>
 
@@ -58,26 +69,16 @@
         </aside>
       </main>
 
-      <section class="focus-panel hidden" id="focusPanel" aria-live="polite">
-        <div class="focus-header">
-          <div>
-            <p class="eyebrow">Focus mode</p>
-            <h2>Clear the skies</h2>
-          </div>
-          <button id="nextFocusButton" class="primary-button" type="button">Next low-fuel plane</button>
-        </div>
-        <div id="focusCard" class="focus-card"></div>
-      </section>
     </div>
 
     <script id="seedData" type="application/json">
       [
-        {"id":"draft-401","title":"Customer wrap-up email for regional launch","type":"draft","agent":"Mila","repo":"Personal ops","needs":"approval to send","sentAt":"2026-10-27T09:45:00-07:00","status":"waiting","risk":"The tone is a bit too casual for enterprise accounts and should be reviewed before sending.","summary":"Email recap to customers after the pilot launch."},
-        {"id":"draft-403","title":"Launch-day social post","type":"draft","agent":"Proxy","repo":"Marketing sync","needs":"approval to publish","sentAt":"2026-10-27T14:20:00-07:00","status":"waiting","risk":"The CTA is slightly too promotional for the current audience, but the message is otherwise strong.","summary":"LinkedIn post for the new AI triage rollout."},
-        {"id":"draft-409","title":"Decision memo for pricing proposal","type":"draft","agent":"Nico","repo":"Strategy desk","needs":"approval before sharing","sentAt":"2026-10-27T17:10:00-07:00","status":"waiting","risk":"The discount language needs a quick pass before the memo is shared with an external audience.","summary":"Recommended pricing structure for the enterprise package."},
-        {"id":"pr-482","title":"Refine agent handoff prompts","type":"pr","agent":"Copilot","repo":"matchday-intelligence","needs":"approve merge","sentAt":"2026-10-27T18:30:00-07:00","status":"waiting","risk":"Good prompt quality, but it changes a high-signal workflow; keep an eye on latency regressions."},
-        {"id":"pr-219","title":"Add dependency update checks","type":"pr","agent":"Dependabot","repo":"demo-sandbox","needs":"security review","sentAt":"2026-10-27T13:10:00-07:00","status":"waiting","risk":"This is a low-risk library bump, but the package lockfile change needs a quick sanity check."},
-        {"id":"pr-314","title":"Fix onboarding analytics report","type":"pr","agent":"Pine","repo":"sample-admin-tools","needs":"approve rollout","sentAt":"2026-10-27T10:00:00-07:00","status":"waiting","risk":"Operationally safe, but the data export is in a shared pipeline and should be validated before release."}
+        {"id":"draft-401","title":"Customer wrap-up email for regional launch","type":"draft","agent":"Mila","repo":"Personal ops","needs":"approval to send","minutesAgo":1140,"status":"waiting","risk":"The tone is a bit too casual for enterprise accounts and should be reviewed before sending.","summary":"Email recap to customers after the pilot launch."},
+        {"id":"draft-403","title":"Launch-day social post","type":"draft","agent":"Proxy","repo":"Marketing sync","needs":"approval to publish","minutesAgo":480,"status":"waiting","risk":"The CTA is slightly too promotional for the current audience, but the message is otherwise strong.","summary":"LinkedIn post for the new AI triage rollout."},
+        {"id":"draft-409","title":"Decision memo for pricing proposal","type":"draft","agent":"Nico","repo":"Strategy desk","needs":"approval before sharing","minutesAgo":180,"status":"waiting","risk":"The discount language needs a quick pass before the memo is shared with an external audience.","summary":"Recommended pricing structure for the enterprise package."},
+        {"id":"pr-482","title":"Refine agent handoff prompts","type":"pr","agent":"Copilot","repo":"matchday-intelligence","needs":"approve merge","minutesAgo":120,"status":"waiting","risk":"Good prompt quality, but it changes a high-signal workflow; keep an eye on latency regressions."},
+        {"id":"pr-219","title":"Add dependency update checks","type":"pr","agent":"Dependabot","repo":"demo-sandbox","needs":"security review","minutesAgo":420,"status":"waiting","risk":"This is a low-risk library bump, but the package lockfile change needs a quick sanity check."},
+        {"id":"pr-314","title":"Fix onboarding analytics report","type":"pr","agent":"Pine","repo":"sample-admin-tools","needs":"approve rollout","minutesAgo":660,"status":"waiting","risk":"Operationally safe, but the data export is in a shared pipeline and should be validated before release."}
       ]
     </script>
 

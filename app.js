@@ -7,7 +7,7 @@ const FALLBACK_SEED = [
     agent: 'Mila',
     repo: 'Personal ops',
     needs: 'approval to send',
-    sentAt: new Date(Date.now() - 19 * 60 * 60 * 1000).toISOString(),
+    minutesAgo: 1140,
     status: 'waiting',
     risk: 'The tone is a bit too casual for enterprise accounts and should be reviewed before sending.',
     summary: 'Email recap to customers after the pilot launch.'
@@ -19,7 +19,7 @@ const FALLBACK_SEED = [
     agent: 'Proxy',
     repo: 'Marketing sync',
     needs: 'approval to publish',
-    sentAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+    minutesAgo: 480,
     status: 'waiting',
     risk: 'The CTA is slightly too promotional for the current audience, but the message is otherwise strong.',
     summary: 'LinkedIn post for the new AI triage rollout.'
@@ -31,7 +31,7 @@ const FALLBACK_SEED = [
     agent: 'Nico',
     repo: 'Strategy desk',
     needs: 'approval before sharing',
-    sentAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    minutesAgo: 180,
     status: 'waiting',
     risk: 'The discount language needs a quick pass before the memo is shared with an external audience.',
     summary: 'Recommended pricing structure for the enterprise package.'
@@ -43,7 +43,7 @@ const FALLBACK_SEED = [
     agent: 'Copilot',
     repo: 'matchday-intelligence',
     needs: 'approve merge',
-    sentAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    minutesAgo: 120,
     status: 'waiting',
     risk: 'Good prompt quality, but it changes a high-signal workflow; keep an eye on latency regressions.'
   },
@@ -54,7 +54,7 @@ const FALLBACK_SEED = [
     agent: 'Dependabot',
     repo: 'demo-sandbox',
     needs: 'security review',
-    sentAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+    minutesAgo: 420,
     status: 'waiting',
     risk: 'This is a low-risk library bump, but the package lockfile change needs a quick sanity check.'
   },
@@ -65,7 +65,7 @@ const FALLBACK_SEED = [
     agent: 'Pine',
     repo: 'sample-admin-tools',
     needs: 'approve rollout',
-    sentAt: new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString(),
+    minutesAgo: 660,
     status: 'waiting',
     risk: 'Operationally safe, but the data export is in a shared pipeline and should be validated before release.'
   }
@@ -74,9 +74,8 @@ const FALLBACK_SEED = [
 const state = {
   items: [],
   selectedId: null,
-  focusIndex: 0,
   focusMode: false,
-  decisions: { today: 0, log: [] }
+  focusIndex: 0
 };
 
 const planeLayer = document.getElementById('planeLayer');
@@ -95,32 +94,25 @@ function getSeedData() {
   }
 }
 
-function hashToPosition(seed) {
-  const total = state.items.length || 1;
-  const index = seed % total;
-  const ring = (index % 4) + 1;
-  const angle = (index / total) * Math.PI * 2 + ((seed * 0.73) % 1) * 0.8;
-  const radius = 18 + (ring * 18) + ((seed % 7) * 3);
-  const x = 50 + Math.cos(angle) * radius;
-  const y = 50 + Math.sin(angle) * radius;
-  return { x, y };
-}
-
-function getWaitMinutes(dateString) {
-  const sent = new Date(dateString).getTime();
-  return Math.max(0, Math.round((Date.now() - sent) / 60000));
-}
-
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+function minutesAgoToSentAt(minutesAgo) {
+  return new Date(Date.now() - Math.max(0, Number(minutesAgo) || 0) * 60 * 1000).toISOString();
+}
+
 function createItemFromRecord(raw) {
-  const waitMinutes = getWaitMinutes(raw.sentAt);
+  const minutesAgo = Number(raw.minutesAgo ?? 0);
+  const sentAt = raw.sentAt || minutesAgoToSentAt(minutesAgo);
+  const waitMinutes = Math.max(0, Math.round((Date.now() - new Date(sentAt).getTime()) / 60000));
   return {
     ...raw,
+    minutesAgo,
+    sentAt,
     waitMinutes,
-    fuel: clamp(Math.round(100 - waitMinutes / 3), 0, 100)
+    fuel: clamp(Math.round(100 - waitMinutes / 3), 0, 100),
+    lastNote: raw.lastNote || ''
   };
 }
 
@@ -141,36 +133,69 @@ function sortItems(items) {
   });
 }
 
+function getWaitingItems() {
+  return state.items.filter(item => item.status === 'waiting');
+}
+
 function getAgentClass(agent) {
   if (/copilot|pilot|release/i.test(agent)) return 'plane--copilot';
   if (/dependabot|bot|ops/i.test(agent)) return 'plane--dependabot';
   return 'plane--draft';
 }
 
+function getLowestFuelItem() {
+  const waiting = getWaitingItems();
+  return waiting.reduce((lowest, current) => (current.fuel < lowest.fuel ? current : lowest), waiting[0]);
+}
+
+function getPlanePosition(item, index, total) {
+  const angle = (index / total) * Math.PI * 2 + Math.PI / 6;
+  const fuelRatio = clamp(item.fuel / 100, 0, 1);
+  const radius = 12 + fuelRatio * 22;
+  const x = 50 + Math.cos(angle) * radius;
+  const y = 50 + Math.sin(angle) * radius;
+  return { x, y };
+}
+
+function updateFocusButton() {
+  const waiting = getWaitingItems();
+  if (!waiting.length) {
+    focusButton.disabled = true;
+    focusButton.textContent = 'Skies are clear';
+    return;
+  }
+
+  focusButton.disabled = false;
+  focusButton.textContent = state.focusMode ? 'Exit focus' : 'Clear the skies';
+}
+
 function updateStatusBar() {
-  document.getElementById('planesInAir').textContent = String(state.items.filter(item => item.status === 'waiting').length);
-  document.getElementById('longestWait').textContent = formatWait(
-    state.items.filter(item => item.status === 'waiting').reduce((max, item) => Math.max(max, item.waitMinutes), 0)
-  );
-  const today = new Date();
-  document.getElementById('landedToday').textContent = String(
-    state.items.filter(item => {
-      if (item.status !== 'landed') return false;
-      const landed = new Date(item.lastDecisionAt || item.sentAt);
-      return landed.toDateString() === today.toDateString();
-    }).length
-  );
+  const waiting = getWaitingItems();
+  const longest = waiting.reduce((max, item) => Math.max(max, item.waitMinutes), 0);
+  const landed = state.items.filter(item => {
+    if (item.status !== 'landed') return false;
+    const landingDate = new Date(item.lastDecisionAt || item.sentAt);
+    return landingDate.toDateString() === new Date().toDateString();
+  }).length;
+
+  document.getElementById('planesInAir').textContent = String(waiting.length);
+  document.getElementById('longestWait').textContent = formatWait(longest);
+  document.getElementById('landedToday').textContent = String(landed);
 }
 
 function renderPlanes() {
-  const items = sortItems(state.items);
-  planeLayer.innerHTML = '';
+  const waiting = getWaitingItems();
+  const total = Math.max(waiting.length, 1);
 
-  items.forEach((item, index) => {
-    const position = hashToPosition(index + item.id.length);
+  planeLayer.replaceChildren();
+
+  state.items.forEach((item) => {
     const button = document.createElement('button');
+    const isWaiting = item.status === 'waiting';
+    const position = isWaiting ? getPlanePosition(item, waiting.indexOf(item), total) : { x: 50, y: 50 };
+
     button.type = 'button';
-    button.className = `plane ${getAgentClass(item.agent)} ${item.id === state.selectedId ? 'selected' : ''} ${item.fuel < 25 ? 'low-fuel' : ''}`;
+    button.className = `plane ${getAgentClass(item.agent)} ${item.id === state.selectedId ? 'selected' : ''} ${isWaiting && item.fuel < 25 ? 'low-fuel' : ''} ${!isWaiting ? 'is-resolved' : ''}`;
     button.style.left = `${position.x}%`;
     button.style.top = `${position.y}%`;
     button.title = `${item.agent} · ${item.needs}`;
@@ -195,77 +220,201 @@ function renderPlanes() {
     button.appendChild(badge);
     button.appendChild(label);
 
-    button.addEventListener('click', () => {
-      state.selectedId = item.id;
-      renderDetail();
-      renderPlanes();
-    });
+    if (isWaiting) {
+      button.addEventListener('click', () => {
+        state.selectedId = item.id;
+        renderDetail();
+        renderPlanes();
+      });
+    }
 
     planeLayer.appendChild(button);
   });
 }
 
+function createMetaItem(labelText, valueText) {
+  const item = document.createElement('div');
+  item.className = 'meta-item';
+
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = labelText;
+
+  const strong = document.createElement('strong');
+  strong.textContent = valueText;
+
+  item.appendChild(label);
+  item.appendChild(strong);
+  return item;
+}
+
 function renderDetail() {
+  detailCard.replaceChildren();
   const item = state.items.find(entry => entry.id === state.selectedId);
+
   if (!item) {
-    detailCard.innerHTML = '<p class="detail-empty">Select a plane to review the request.</p>';
+    const empty = document.createElement('p');
+    empty.className = 'detail-empty';
+    empty.textContent = 'Select a plane to review the request.';
+    detailCard.appendChild(empty);
     return;
   }
 
-  const note = item.lastNote || 'No decision sent yet.';
-  detailCard.innerHTML = `
-    <div class="detail-header">
-      <div>
-        <p class="eyebrow">${item.type === 'pr' ? 'Approval queue' : 'Local draft'}</p>
-        <h3>${item.title}</h3>
-      </div>
-      <span class="badge ${item.type === 'pr' ? 'pr' : 'draft'}">${item.type === 'pr' ? 'pull request' : 'draft'}</span>
-    </div>
+  const header = document.createElement('div');
+  header.className = 'detail-header';
 
-    <div class="meta-grid">
-      <div class="meta-item">
-        <span class="label">Agent</span>
-        <strong>${item.agent}</strong>
-      </div>
-      <div class="meta-item">
-        <span class="label">Repo</span>
-        <strong>${item.repo}</strong>
-      </div>
-      <div class="meta-item">
-        <span class="label">Needs</span>
-        <strong>${item.needs}</strong>
-      </div>
-      <div class="meta-item">
-        <span class="label">Wait</span>
-        <strong>${formatWait(item.waitMinutes)}</strong>
-      </div>
-    </div>
+  const titleWrap = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = item.type === 'pr' ? 'Approval queue' : 'Local draft';
 
-    <div class="risk-box">
-      <h4>Risk note</h4>
-      <p>${item.risk}</p>
-    </div>
+  const title = document.createElement('h3');
+  title.textContent = item.title;
 
-    <div class="note-box">
-      <h4>Last note</h4>
-      <p>${note}</p>
-    </div>
+  titleWrap.appendChild(eyebrow);
+  titleWrap.appendChild(title);
 
-    <div class="action-row">
-      <button class="primary-button" type="button" data-action="land">Land it</button>
-      <button class="secondary-button" type="button" data-action="change">Send around</button>
-      <button class="ghost-button" type="button" data-action="snooze">Holding pattern</button>
-    </div>
+  const badge = document.createElement('span');
+  badge.className = `badge ${item.type === 'pr' ? 'pr' : 'draft'}`;
+  badge.textContent = item.type === 'pr' ? 'pull request' : 'draft';
 
-    <textarea class="input-note" id="decisionNote" placeholder="Add a short decision note for the agent..."></textarea>
-  `;
+  header.appendChild(titleWrap);
+  header.appendChild(badge);
 
-  detailCard.querySelectorAll('[data-action]').forEach(button => {
+  const metaGrid = document.createElement('div');
+  metaGrid.className = 'meta-grid';
+  metaGrid.appendChild(createMetaItem('Agent', item.agent));
+  metaGrid.appendChild(createMetaItem('Repo', item.repo));
+  metaGrid.appendChild(createMetaItem('Needs', item.needs));
+  metaGrid.appendChild(createMetaItem('Wait', formatWait(item.waitMinutes)));
+
+  const riskBox = document.createElement('div');
+  riskBox.className = 'risk-box';
+  const riskTitle = document.createElement('h4');
+  riskTitle.textContent = 'Risk note';
+  const riskText = document.createElement('p');
+  riskText.textContent = item.risk;
+  riskBox.appendChild(riskTitle);
+  riskBox.appendChild(riskText);
+
+  const noteBox = document.createElement('div');
+  noteBox.className = 'note-box';
+  const noteTitle = document.createElement('h4');
+  noteTitle.textContent = 'Last note';
+  const noteText = document.createElement('p');
+  noteText.textContent = item.lastNote || 'No decision sent yet.';
+  noteBox.appendChild(noteTitle);
+  noteBox.appendChild(noteText);
+
+  const actionRow = document.createElement('div');
+  actionRow.className = 'action-row';
+
+  function createActionButton(action, label, className) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.dataset.action = action;
+    button.textContent = label;
     button.addEventListener('click', () => {
-      const noteValue = document.getElementById('decisionNote').value.trim();
-      handleDecision(item.id, button.dataset.action, noteValue || undefined);
+      const noteValue = noteInput.value.trim();
+      handleDecision(item.id, action, noteValue || undefined);
     });
-  });
+    return button;
+  }
+
+  const noteInput = document.createElement('textarea');
+  noteInput.className = 'input-note';
+  noteInput.id = 'decisionNote';
+  noteInput.placeholder = 'Add a short decision note for the agent...';
+
+  actionRow.appendChild(createActionButton('land', 'Land it', 'primary-button'));
+  actionRow.appendChild(createActionButton('change', 'Send around', 'secondary-button'));
+  actionRow.appendChild(createActionButton('snooze', 'Holding pattern', 'ghost-button'));
+
+  detailCard.appendChild(header);
+  detailCard.appendChild(metaGrid);
+  detailCard.appendChild(riskBox);
+  detailCard.appendChild(noteBox);
+  detailCard.appendChild(actionRow);
+  detailCard.appendChild(noteInput);
+}
+
+function renderFocus() {
+  if (!state.focusMode) {
+    focusPanel.classList.add('hidden');
+    return;
+  }
+
+  const queue = getWaitingItems();
+  if (!queue.length) {
+    focusPanel.classList.remove('hidden');
+    focusCard.replaceChildren();
+    const message = document.createElement('p');
+    message.textContent = 'Skies are clear';
+    focusCard.appendChild(message);
+    return;
+  }
+
+  focusPanel.classList.remove('hidden');
+  focusCard.replaceChildren();
+
+  const current = queue[state.focusIndex % queue.length] || queue[0];
+  state.selectedId = current.id;
+
+  const dataWrap = document.createElement('div');
+  dataWrap.className = 'focus-data';
+
+  const textWrap = document.createElement('div');
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'Lowest fuel';
+
+  const focusTitle = document.createElement('h3');
+  focusTitle.textContent = current.title;
+
+  const details = document.createElement('div');
+  details.className = 'focus-planned';
+  details.textContent = `${current.agent} · ${current.repo} · ${formatWait(current.waitMinutes)} waiting`;
+
+  textWrap.appendChild(eyebrow);
+  textWrap.appendChild(focusTitle);
+  textWrap.appendChild(details);
+
+  const fuelBadge = document.createElement('div');
+  fuelBadge.className = `badge ${current.type === 'pr' ? 'pr' : 'draft'}`;
+  fuelBadge.textContent = `${current.fuel}% fuel`;
+
+  dataWrap.appendChild(textWrap);
+  dataWrap.appendChild(fuelBadge);
+
+  const riskText = document.createElement('p');
+  riskText.textContent = current.risk;
+
+  focusCard.appendChild(dataWrap);
+  focusCard.appendChild(riskText);
+}
+
+function toggleFocusMode() {
+  const waiting = getWaitingItems();
+  if (!waiting.length) {
+    state.focusMode = false;
+    focusPanel.classList.remove('hidden');
+    renderFocus();
+    updateFocusButton();
+    return;
+  }
+
+  state.focusMode = !state.focusMode;
+  if (state.focusMode) {
+    state.focusIndex = 0;
+    const target = getLowestFuelItem();
+    state.selectedId = target.id;
+    renderDetail();
+    renderPlanes();
+  }
+
+  renderFocus();
+  updateFocusButton();
 }
 
 function handleDecision(itemId, action, note) {
@@ -282,61 +431,52 @@ function handleDecision(itemId, action, note) {
   item.status = action === 'land' ? 'landed' : action === 'change' ? 'changes-requested' : 'snoozed';
   item.lastDecisionAt = new Date().toISOString();
 
-  state.decisions.log.unshift({ id: itemId, action, summary: `${item.agent} · ${resultNote}` });
-  if (action === 'land') state.decisions.today += 1;
+  if (state.focusMode) {
+    const remaining = getWaitingItems();
+    if (remaining.length) {
+      state.focusIndex = 0;
+      state.selectedId = remaining[0].id;
+    } else {
+      state.focusMode = false;
+      state.selectedId = null;
+    }
+  }
 
   updateStatusBar();
+  updateFocusButton();
   renderPlanes();
   renderDetail();
   renderFocus();
 }
 
-function buildFocusQueue() {
-  return sortItems(state.items.filter(item => item.status === 'waiting'));
-}
-
-function renderFocus() {
-  const queue = buildFocusQueue();
-  if (!state.focusMode || queue.length === 0) {
+focusButton.addEventListener('click', () => {
+  if (state.focusMode) {
+    state.focusMode = false;
     focusPanel.classList.add('hidden');
+    updateFocusButton();
     return;
   }
 
-  focusPanel.classList.remove('hidden');
-  const current = queue[state.focusIndex % queue.length] || queue[0];
-  if (!current) return;
-
-  focusCard.innerHTML = `
-    <div class="focus-data">
-      <div>
-        <p class="eyebrow">Lowest fuel</p>
-        <h3>${current.title}</h3>
-        <div class="focus-planned">${current.agent} · ${current.repo} · ${formatWait(current.waitMinutes)} waiting</div>
-      </div>
-      <div class="badge ${current.type === 'pr' ? 'pr' : 'draft'}">${current.fuel}% fuel</div>
-    </div>
-    <p>${current.risk}</p>
-  `;
-}
-
-function startFocusMode() {
-  const queue = buildFocusQueue();
-  if (queue.length === 0) return;
-  state.focusMode = true;
-  state.focusIndex = 0;
-  renderFocus();
-}
-
-focusButton.addEventListener('click', startFocusMode);
+  toggleFocusMode();
+});
 
 nextFocusButton.addEventListener('click', () => {
-  const queue = buildFocusQueue();
-  if (!queue.length) return;
-  state.focusIndex = (state.focusIndex + 1) % queue.length;
-  renderFocus();
-  state.selectedId = queue[state.focusIndex].id;
+  const waiting = getWaitingItems();
+  if (!waiting.length) {
+    state.focusMode = false;
+    focusPanel.classList.remove('hidden');
+    renderFocus();
+    updateFocusButton();
+    return;
+  }
+
+  state.focusMode = true;
+  state.focusIndex = (state.focusIndex + 1) % waiting.length;
+  state.selectedId = waiting[state.focusIndex].id;
   renderDetail();
   renderPlanes();
+  renderFocus();
+  updateFocusButton();
 });
 
 function bootstrap() {
@@ -344,13 +484,10 @@ function bootstrap() {
   state.items = baseData.map(createItemFromRecord);
   state.selectedId = state.items[0]?.id || null;
   updateStatusBar();
+  updateFocusButton();
   renderPlanes();
   renderDetail();
   renderFocus();
 }
 
 bootstrap();
-
-window.addEventListener('beforeunload', () => {
-  // Security-first static interface: no network write-back, no auto-send, no auto-merge.
-});

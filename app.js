@@ -1,4 +1,5 @@
-const FALLBACK_APPROVALS = [
+const seedData = document.getElementById('seedData');
+const FALLBACK_SEED = [
   {
     id: 'draft-401',
     title: 'Customer wrap-up email for regional launch',
@@ -8,7 +9,7 @@ const FALLBACK_APPROVALS = [
     needs: 'approval to send',
     sentAt: new Date(Date.now() - 19 * 60 * 60 * 1000).toISOString(),
     status: 'waiting',
-    risk: 'Tones down the urgency and should be reviewed for policy wording before sending.',
+    risk: 'The tone is a bit too casual for enterprise accounts and should be reviewed before sending.',
     summary: 'Email recap to customers after the pilot launch.'
   },
   {
@@ -20,7 +21,7 @@ const FALLBACK_APPROVALS = [
     needs: 'approval to publish',
     sentAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
     status: 'waiting',
-    risk: 'Strong announcement, but the CTA is slightly too promotional for the current audience.',
+    risk: 'The CTA is slightly too promotional for the current audience, but the message is otherwise strong.',
     summary: 'LinkedIn post for the new AI triage rollout.'
   },
   {
@@ -32,12 +33,9 @@ const FALLBACK_APPROVALS = [
     needs: 'approval before sharing',
     sentAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
     status: 'waiting',
-    risk: 'Needs a last pass on discount language before external distribution.',
+    risk: 'The discount language needs a quick pass before the memo is shared with an external audience.',
     summary: 'Recommended pricing structure for the enterprise package.'
-  }
-];
-
-const SAMPLE_PULL_REQUESTS = [
+  },
   {
     id: 'pr-482',
     title: 'Refine agent handoff prompts',
@@ -70,39 +68,6 @@ const SAMPLE_PULL_REQUESTS = [
     sentAt: new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString(),
     status: 'waiting',
     risk: 'Operationally safe, but the data export is in a shared pipeline and should be validated before release.'
-  },
-  {
-    id: 'pr-991',
-    title: 'Tighten billing-export schema',
-    type: 'pr',
-    agent: 'Ops Bot',
-    repo: 'sample-upstream',
-    needs: 'approve schema change',
-    sentAt: new Date(Date.now() - 22 * 60 * 60 * 1000).toISOString(),
-    status: 'waiting',
-    risk: 'The schema change is narrow but touches downstream consumers; request validation before signoff.'
-  },
-  {
-    id: 'pr-847',
-    title: 'Add release notes generator',
-    type: 'pr',
-    agent: 'Release Copilot',
-    repo: 'Understand-Anything',
-    needs: 'review for publication',
-    sentAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    status: 'waiting',
-    risk: 'Mostly documentation and automation; risk is moderate only because it changes the release path.'
-  },
-  {
-    id: 'pr-590',
-    title: 'Prepare email automation for win-back flow',
-    type: 'pr',
-    agent: 'Grok',
-    repo: 'living-ai-pet',
-    needs: 'approve customer outreach copy',
-    sentAt: new Date(Date.now() - 32 * 60 * 60 * 1000).toISOString(),
-    status: 'waiting',
-    risk: 'Customer-facing copy is likely fine, but the no-reply trigger should be checked for message delivery policy.'
   }
 ];
 
@@ -111,10 +76,7 @@ const state = {
   selectedId: null,
   focusIndex: 0,
   focusMode: false,
-  decisions: {
-    today: 0,
-    log: []
-  }
+  decisions: { today: 0, log: [] }
 };
 
 const planeLayer = document.getElementById('planeLayer');
@@ -123,6 +85,15 @@ const focusCard = document.getElementById('focusCard');
 const focusPanel = document.getElementById('focusPanel');
 const focusButton = document.getElementById('focusButton');
 const nextFocusButton = document.getElementById('nextFocusButton');
+
+function getSeedData() {
+  try {
+    const parsed = JSON.parse(seedData?.textContent || '[]');
+    return Array.isArray(parsed) && parsed.length ? parsed : FALLBACK_SEED;
+  } catch (error) {
+    return FALLBACK_SEED;
+  }
+}
 
 function hashToPosition(seed) {
   const total = state.items.length || 1;
@@ -135,14 +106,6 @@ function hashToPosition(seed) {
   return { x, y };
 }
 
-function createItemFromRecord(raw) {
-  return {
-    ...raw,
-    waitMinutes: getWaitMinutes(raw.sentAt),
-    fuel: clamp(Math.round(100 - getWaitMinutes(raw.sentAt) / 3), 0, 100)
-  };
-}
-
 function getWaitMinutes(dateString) {
   const sent = new Date(dateString).getTime();
   return Math.max(0, Math.round((Date.now() - sent) / 60000));
@@ -150,6 +113,15 @@ function getWaitMinutes(dateString) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function createItemFromRecord(raw) {
+  const waitMinutes = getWaitMinutes(raw.sentAt);
+  return {
+    ...raw,
+    waitMinutes,
+    fuel: clamp(Math.round(100 - waitMinutes / 3), 0, 100)
+  };
 }
 
 function formatWait(minutes) {
@@ -162,36 +134,32 @@ function formatWait(minutes) {
   return `${days}d ${hourRemainder}h`;
 }
 
-function getLongestWait() {
-  return state.items
-    .filter(item => item.status === 'waiting')
-    .reduce((max, item) => Math.max(max, item.waitMinutes), 0);
-}
-
-function getPlanesInAir() {
-  return state.items.filter(item => item.status === 'waiting').length;
-}
-
-function getLandedToday() {
-  const today = new Date();
-  return state.items.filter(item => {
-    if (item.status !== 'landed') return false;
-    const landed = new Date(item.lastDecisionAt || item.sentAt);
-    return landed.toDateString() === today.toDateString();
-  }).length;
-}
-
-function updateStatusBar() {
-  document.getElementById('planesInAir').textContent = String(getPlanesInAir());
-  document.getElementById('longestWait').textContent = formatWait(getLongestWait());
-  document.getElementById('landedToday').textContent = String(getLandedToday());
-}
-
 function sortItems(items) {
   return [...items].sort((a, b) => {
     if (a.status !== b.status) return a.status === 'waiting' ? -1 : 1;
     return a.fuel - b.fuel;
   });
+}
+
+function getAgentClass(agent) {
+  if (/copilot|pilot|release/i.test(agent)) return 'plane--copilot';
+  if (/dependabot|bot|ops/i.test(agent)) return 'plane--dependabot';
+  return 'plane--draft';
+}
+
+function updateStatusBar() {
+  document.getElementById('planesInAir').textContent = String(state.items.filter(item => item.status === 'waiting').length);
+  document.getElementById('longestWait').textContent = formatWait(
+    state.items.filter(item => item.status === 'waiting').reduce((max, item) => Math.max(max, item.waitMinutes), 0)
+  );
+  const today = new Date();
+  document.getElementById('landedToday').textContent = String(
+    state.items.filter(item => {
+      if (item.status !== 'landed') return false;
+      const landed = new Date(item.lastDecisionAt || item.sentAt);
+      return landed.toDateString() === today.toDateString();
+    }).length
+  );
 }
 
 function renderPlanes() {
@@ -201,24 +169,38 @@ function renderPlanes() {
   items.forEach((item, index) => {
     const position = hashToPosition(index + item.id.length);
     const button = document.createElement('button');
-    button.className = `plane ${item.id === state.selectedId ? 'selected' : ''} ${item.fuel < 25 ? 'low-fuel' : ''}`;
     button.type = 'button';
+    button.className = `plane ${getAgentClass(item.agent)} ${item.id === state.selectedId ? 'selected' : ''} ${item.fuel < 25 ? 'low-fuel' : ''}`;
     button.style.left = `${position.x}%`;
     button.style.top = `${position.y}%`;
     button.title = `${item.agent} · ${item.needs}`;
     button.setAttribute('aria-label', `${item.agent} ${item.title}`);
-    button.innerHTML = `
-      <span class="plane-badge"></span>
-      <span class="plane-label">
-        <span class="plane-tag">${item.agent}</span>
-        <span class="plane-name">${item.type === 'pr' ? 'PR' : 'Draft'}</span>
-      </span>
-    `;
+
+    const badge = document.createElement('span');
+    badge.className = 'plane-badge';
+
+    const label = document.createElement('span');
+    label.className = 'plane-label';
+
+    const tag = document.createElement('span');
+    tag.className = 'plane-tag';
+    tag.textContent = item.agent;
+
+    const name = document.createElement('span');
+    name.className = 'plane-name';
+    name.textContent = item.type === 'pr' ? 'PR' : 'Draft';
+
+    label.appendChild(tag);
+    label.appendChild(name);
+    button.appendChild(badge);
+    button.appendChild(label);
+
     button.addEventListener('click', () => {
       state.selectedId = item.id;
       renderDetail();
       renderPlanes();
     });
+
     planeLayer.appendChild(button);
   });
 }
@@ -230,16 +212,14 @@ function renderDetail() {
     return;
   }
 
-  const statusLabel = item.type === 'pr' ? 'pull request' : 'draft';
   const note = item.lastNote || 'No decision sent yet.';
-
   detailCard.innerHTML = `
     <div class="detail-header">
       <div>
         <p class="eyebrow">${item.type === 'pr' ? 'Approval queue' : 'Local draft'}</p>
         <h3>${item.title}</h3>
       </div>
-      <span class="badge ${item.type === 'pr' ? 'pr' : 'draft'}">${statusLabel}</span>
+      <span class="badge ${item.type === 'pr' ? 'pr' : 'draft'}">${item.type === 'pr' ? 'pull request' : 'draft'}</span>
     </div>
 
     <div class="meta-grid">
@@ -302,15 +282,8 @@ function handleDecision(itemId, action, note) {
   item.status = action === 'land' ? 'landed' : action === 'change' ? 'changes-requested' : 'snoozed';
   item.lastDecisionAt = new Date().toISOString();
 
-  state.decisions.log.unshift({
-    id: itemId,
-    action,
-    summary: `${item.agent} · ${resultNote}`
-  });
-
-  if (action === 'land') {
-    state.decisions.today += 1;
-  }
+  state.decisions.log.unshift({ id: itemId, action, summary: `${item.agent} · ${resultNote}` });
+  if (action === 'land') state.decisions.today += 1;
 
   updateStatusBar();
   renderPlanes();
@@ -349,15 +322,12 @@ function renderFocus() {
 function startFocusMode() {
   const queue = buildFocusQueue();
   if (queue.length === 0) return;
-
   state.focusMode = true;
   state.focusIndex = 0;
   renderFocus();
 }
 
-focusButton.addEventListener('click', () => {
-  startFocusMode();
-});
+focusButton.addEventListener('click', startFocusMode);
 
 nextFocusButton.addEventListener('click', () => {
   const queue = buildFocusQueue();
@@ -369,22 +339,10 @@ nextFocusButton.addEventListener('click', () => {
   renderPlanes();
 });
 
-async function loadApprovals() {
-  try {
-    const response = await fetch('approvals.json');
-    if (!response.ok) throw new Error('Approvals file not found');
-    const data = await response.json();
-    return Array.isArray(data) ? data : FALLBACK_APPROVALS;
-  } catch (error) {
-    return FALLBACK_APPROVALS;
-  }
-}
-
-async function bootstrap() {
-  const localDrafts = await loadApprovals();
-  const flattened = [...SAMPLE_PULL_REQUESTS, ...localDrafts].map(createItemFromRecord);
-  state.items = flattened;
-  state.selectedId = flattened[0]?.id || null;
+function bootstrap() {
+  const baseData = getSeedData();
+  state.items = baseData.map(createItemFromRecord);
+  state.selectedId = state.items[0]?.id || null;
   updateStatusBar();
   renderPlanes();
   renderDetail();
@@ -392,3 +350,7 @@ async function bootstrap() {
 }
 
 bootstrap();
+
+window.addEventListener('beforeunload', () => {
+  // Security-first static interface: no network write-back, no auto-send, no auto-merge.
+});

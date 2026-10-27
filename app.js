@@ -619,11 +619,12 @@ function handleDecision(itemId, action, note) {
   const now = performance.now();
   const sign = callsign(item);
 
-  const resultNote = note || {
-    land: 'Approved and queued for merge/release.',
-    change: 'Requested changes with a brief review note.',
-    snooze: 'Held for later review on the next pass.'
-  }[action];
+  const DEFAULT_NOTES = new Map([
+    ['land', 'Approved and queued for merge/release.'],
+    ['change', 'Requested changes with a brief review note.'],
+    ['snooze', 'Held for later review on the next pass.']
+  ]);
+  const resultNote = note || DEFAULT_NOTES.get(action);
   if (!resultNote) return;
 
   item.lastNote = resultNote;
@@ -1043,7 +1044,7 @@ document.addEventListener('keydown', event => {
     nextFocus();
     return;
   }
-  const action = { l: 'land', s: 'change', h: 'snooze' }[key];
+  const action = new Map([['l', 'land'], ['s', 'change'], ['h', 'snooze']]).get(key);
   if (!action) return;
   const item = state.focusMode ? getFocusTarget() : findItem(state.selectedId);
   if (!item || !isAirborne(item)) return;

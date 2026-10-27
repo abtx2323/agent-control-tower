@@ -1,4 +1,4 @@
-# Agent Approval Desk
+# Agent Control Tower
 
 A static, no-account canvas for reviewing everything your AI agents are waiting on you for, styled as an air traffic control tower. Every request is a plane: the longer it waits, the more fuel it burns and the closer it drifts to the runway.
 

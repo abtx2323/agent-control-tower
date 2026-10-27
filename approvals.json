@@ -1,0 +1,38 @@
+[
+  {
+    "id": "draft-401",
+    "title": "Customer wrap-up email for regional launch",
+    "type": "draft",
+    "agent": "Mila",
+    "repo": "Personal ops",
+    "needs": "approval to send",
+    "sentAt": "2026-10-27T09:45:00-07:00",
+    "status": "waiting",
+    "risk": "The tone is a bit too casual for enterprise accounts and should be reviewed before sending.",
+    "summary": "Email recap to customers after the pilot launch."
+  },
+  {
+    "id": "draft-403",
+    "title": "Launch-day social post",
+    "type": "draft",
+    "agent": "Proxy",
+    "repo": "Marketing sync",
+    "needs": "approval to publish",
+    "sentAt": "2026-10-27T14:20:00-07:00",
+    "status": "waiting",
+    "risk": "The CTA is slightly too promotional for the current audience, but the message is otherwise strong.",
+    "summary": "LinkedIn post for the new AI triage rollout."
+  },
+  {
+    "id": "draft-409",
+    "title": "Decision memo for pricing proposal",
+    "type": "draft",
+    "agent": "Nico",
+    "repo": "Strategy desk",
+    "needs": "approval before sharing",
+    "sentAt": "2026-10-27T17:10:00-07:00",
+    "status": "waiting",
+    "risk": "The discount language needs a quick pass before the memo is shared with an external audience.",
+    "summary": "Recommended pricing structure for the enterprise package."
+  }
+]

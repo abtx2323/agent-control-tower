@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Control Tower</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="tower-header">
+        <div>
+          <p class="eyebrow">Agent Approval Desk</p>
+          <h1>Agent Control Tower</h1>
+        </div>
+
+        <div class="tower-actions">
+          <button id="focusButton" class="ghost-button">Clear the skies</button>
+        </div>
+      </header>
+
+      <section class="status-bar" aria-label="Tower status summary">
+        <div class="status-tile">
+          <span class="tile-label">Planes in the air</span>
+          <strong id="planesInAir">0</strong>
+        </div>
+        <div class="status-tile">
+          <span class="tile-label">Longest wait</span>
+          <strong id="longestWait">00:00</strong>
+        </div>
+        <div class="status-tile">
+          <span class="tile-label">Landed today</span>
+          <strong id="landedToday">0</strong>
+        </div>
+      </section>
+
+      <main class="radar-layout">
+        <section class="radar-panel">
+          <div class="radar-grid" aria-label="Air traffic radar board">
+            <div class="radar-ring ring-1"></div>
+            <div class="radar-ring ring-2"></div>
+            <div class="radar-ring ring-3"></div>
+            <div class="radar-ring ring-4"></div>
+            <div class="radar-crosshair"></div>
+            <div id="planeLayer" class="plane-layer" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <aside class="detail-panel" aria-live="polite">
+          <div id="detailCard" class="detail-card">
+            <p class="detail-empty">Select a plane to review the request.</p>
+          </div>
+        </aside>
+      </main>
+
+      <section class="focus-panel hidden" id="focusPanel" aria-live="polite">
+        <div class="focus-header">
+          <div>
+            <p class="eyebrow">Focus mode</p>
+            <h2>Clear the skies</h2>
+          </div>
+          <button id="nextFocusButton" class="primary-button">Next low-fuel plane</button>
+        </div>
+        <div id="focusCard" class="focus-card"></div>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

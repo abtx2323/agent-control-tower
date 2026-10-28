@@ -42,6 +42,10 @@ All keys are listed under [Keyboard shortcuts](#keyboard-shortcuts).
 - **Tower radio.** A scrolling log of call-and-response radio lines for every decision, low-fuel call, mayday, weather change, hold and rejoin, sim speed change and landing run start (last 30 calls).
 - **Mayday mode.** A plane that hits 0% fuel declares an emergency. The radar edge pulses red, the plane gets a MAYDAY badge and it jumps to the top of the queue.
 - **Agent weather.** Requests that need a security review, or whose approval mentions sending, publishing or sharing, spawn storm cells on the radar. Planes route around them, and the detail card shows the weather.
+- **Scenarios.** Choose a themed shift (Classic, Launch Day, Critical Bug, Security Incident or All Hands Review), each with its own queue, urgency, weather and wind. Generated scenarios use a fixed seed, so each replay is identical.
+- **Radar layers.** Toggle flight trails, approach vectors and the wind indicator independently from the *Layers* buttons. Wind also affects storm routing.
+- **Medals.** Earn six medals for landing performance, fuel, risk, speed, mayday avoidance and streaks. Medals are saved in `localStorage`, and the finish card shows the current scenario, difficulty and previous-run comparison.
+- **Undo.** Withdraw the most recent decision once per plane. The plane returns to the radar, stats are restored and the related radio lines are struck through.
 - Click any plane for details, risk notes and a decision note. Sample data is included, so it works right away without a connected account. Animations respect `prefers-reduced-motion`.
 
 ## Keyboard shortcuts
@@ -52,9 +56,10 @@ All keys are listed under [Keyboard shortcuts](#keyboard-shortcuts).
 | `L` | Land it |
 | `S` | Send around (request changes) |
 | `H` | Holding pattern |
-| `N` | Next plane in the queue (starts focus mode if it is off) |
+| `N` | Next lowest-fuel plane |
+| `U` | Undo the last decision |
 | `Esc` | Exit focus mode, or close the finish card |
-| `R` | Run it again (on the finish screen) |
+| `R` | Replay the selected scenario (on the finish screen) |
 
 Keys are ignored while you type in the decision note box.
 

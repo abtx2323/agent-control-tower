@@ -26,6 +26,11 @@
             <button class="speed-button" type="button" data-speed="10" aria-pressed="true">10x</button>
             <button class="speed-button" type="button" data-speed="60" aria-pressed="false">60x</button>
           </div>
+          <label class="scenario-picker">
+            <span class="tile-label">Scenario</span>
+            <select id="scenarioSelect" aria-label="Scenario"></select>
+          </label>
+          <button id="undoButton" class="ghost-button hidden" type="button" aria-label="Undo last decision">Undo <kbd>U</kbd></button>
           <button id="focusButton" class="ghost-button" type="button">Clear the skies</button>
         </div>
       </header>
@@ -54,6 +59,13 @@
           <div class="radar-toolbar">
             <span class="tile-label">Radar <span id="simClock" class="sim-clock">T+0:00</span></span>
             <span id="weatherSummary" class="tile-label weather-summary"></span>
+            <span id="windIndicator" class="wind-indicator tile-label" role="img" aria-label="Wind"></span>
+          </div>
+          <div class="layer-toggle" role="group" aria-label="Radar layers">
+            <span class="tile-label">Layers</span>
+            <button class="speed-button" type="button" data-layer="trails" aria-pressed="true">Trails</button>
+            <button class="speed-button" type="button" data-layer="vectors" aria-pressed="true">Vectors</button>
+            <button class="speed-button" type="button" data-layer="wind" aria-pressed="true">Wind</button>
           </div>
 
           <div id="radarGrid" class="radar-grid" aria-label="Air traffic radar board">
@@ -68,14 +80,18 @@
               <span class="runway-number runway-number--b">27</span>
             </div>
             <div id="stormLayer" class="storm-layer" aria-hidden="true"></div>
+            <canvas id="trailCanvas" class="trail-canvas" aria-hidden="true"></canvas>
             <div id="planeLayer" class="plane-layer" aria-label="Planes waiting for approval"></div>
 
             <div id="finishCard" class="finish-card hidden" role="dialog" aria-labelledby="finishTitle">
               <p class="eyebrow">Shift complete</p>
               <h2 id="finishTitle">Skies cleared</h2>
+              <p id="finishScenario" class="finish-scenario"></p>
               <p id="finishStats" class="finish-stats"></p>
+              <p id="finishCompare" class="finish-compare"></p>
+              <ul id="finishMedals" class="finish-medals" aria-label="Medals earned this shift"></ul>
               <div class="finish-actions">
-                <button id="restartButton" class="primary-button" type="button">Run it again <kbd>R</kbd></button>
+                <button id="restartButton" class="primary-button" type="button">Replay scenario <kbd>R</kbd></button>
                 <button id="closeFinishButton" class="ghost-button" type="button">Close</button>
               </div>
             </div>
@@ -109,7 +125,7 @@
             </div>
             <div id="focusCard" class="focus-card"></div>
             <div class="focus-footer">
-              <p class="key-hints"><kbd>L</kbd> land <kbd>S</kbd> send around <kbd>H</kbd> hold <kbd>Esc</kbd> exit</p>
+              <p class="key-hints"><kbd>L</kbd> land <kbd>S</kbd> send around <kbd>H</kbd> hold <kbd>U</kbd> undo <kbd>Esc</kbd> exit</p>
               <button id="nextFocusButton" class="secondary-button" type="button">Next low-fuel plane <kbd>N</kbd></button>
             </div>
           </section>

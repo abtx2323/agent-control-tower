@@ -1161,7 +1161,11 @@ function renderSummary(run, elapsed) {
   const current = { elapsedMs: Math.round(elapsed), landed: run.landed, sent: run.sent, best: run.best, medals: run.medals.length, at: stamp };
   runs[scenario.id] = current;
   saveStore('runs', runs);
-  if (previous && isNum(previous.elapsedMs) && isNum(previous.best) && isNum(previous.medals)) {
+  const inRange = (value, max) => isNum(value) && value >= 0 && value <= max;
+  const plausible = previous && inRange(previous.elapsedMs, 24 * 60 * 60 * 1000)
+    && Number.isInteger(previous.best) && inRange(previous.best, 1000)
+    && Number.isInteger(previous.medals) && inRange(previous.medals, MEDALS.length);
+  if (plausible) {
     const diff = Math.round((elapsed - previous.elapsedMs) / 1000);
     const timeText = diff === 0 ? 'same time' : `${formatClock(Math.abs(diff) * 1000)} ${diff < 0 ? 'faster' : 'slower'}`;
     dom.finishCompare.textContent = `Previous run: ${formatClock(previous.elapsedMs)}, streak ${previous.best}, ${previous.medals} medal${previous.medals === 1 ? '' : 's'} \u00B7 this run ${timeText}, streak ${run.best >= previous.best ? '+' : '-'}${Math.abs(run.best - previous.best)}`;
@@ -1182,7 +1186,7 @@ function renderSummary(run, elapsed) {
     dom.finishMedals.appendChild(entry);
   });
   if (!run.medals.length) dom.finishMedals.appendChild(makeEl('li', 'medal-none', 'No medals this time. Try a longer streak or a cleaner approach.'));
-  const total = Object.keys(earned).length;
+  const total = MEDALS.filter(medal => Object.hasOwn(earned, medal.id)).length;
   dom.finishMedals.appendChild(makeEl('li', 'medal-none', `Collection: ${total} of ${MEDALS.length} medals`));
 }
 

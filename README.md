@@ -28,7 +28,7 @@ No sign-in or install. The walkthrough uses the **Classic** scenario, which load
    - The radio logs "All stations, skies are clear."
    - A line with the scenario and difficulty, the medals you earned, and a comparison with your previous run on that scenario.
    - Press **Esc** to close it.
-9. **Replay.** Press **R** or click **Replay scenario (R, finish screen only)**. This reloads the current scenario. All six sample requests reload, the radio log starts over, and a new landing run begins in focus mode. Press **Esc** to leave focus mode.
+9. **Replay.** Press **R** or click **Replay scenario** on the finish card. This reloads the current scenario. All six sample requests reload, the radio log starts over, and a new landing run begins in focus mode. Press **Esc** to leave focus mode.
 
 All keys are listed under [Keyboard shortcuts](#keyboard-shortcuts).
 

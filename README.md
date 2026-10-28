@@ -2,7 +2,7 @@
 
 A static, no-account canvas for reviewing everything your AI agents are waiting on you for, styled as an air traffic control tower. Every request is a plane: the longer it waits, the more fuel it burns. Land it, send it around, or hold it—and watch your decisions ripple across the radar in real time.
 
-![Agent Control Tower: the radar shows six agent requests as planes, with Mila's draft in MAYDAY at 0% fuel and the radar edge glowing red, and the detail card on the right showing its wait, fuel, weather and decision options.](screenshot.png)
+![Agent Control Tower mid-shift in the Launch Day scenario: seven agent requests circle the radar with the Trails, Vectors and Wind layers on, two low-fuel planes glow red, three planes are on the ground, the detail card shows Dependabot's "Trim CI matrix" pull request waiting on a security review, and the Tower radio logs a Perfect Landing medal and a 3-in-a-row streak.](assets/screenshot.png)
 
 ## Try it in 60 seconds
 

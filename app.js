@@ -494,7 +494,7 @@ function stormBend(item, radius) {
   const distance = (radius - item.stormRadius) / CONFIG.stormWidth;
   const wind = state.scenario.wind;
   const angle = item.baseAngle + state.spin;
-  const windFactor = wind ? 1 + wind.strength * Math.cos((wind.dir * Math.PI) / 180 - angle) : 1;
+  const windFactor = wind ? 1 + wind.strength * Math.cos(((wind.dir - 90) * Math.PI) / 180 - angle) : 1;
   return (CONFIG.stormClearance / Math.max(radius, 6)) * Math.exp(-distance * distance) * windFactor;
 }
 
@@ -677,7 +677,7 @@ function syncStorm(item) {
   if (!isAirborne(item) && !item.stormEl.classList.contains('is-clearing')) {
     const storm = item.stormEl;
     storm.classList.add('is-clearing');
-    radio('Weather', `Storm cell near ${callsign(item)} dissipating.`, 'weather');
+    trackUndoLine(item, radio('Weather', `Storm cell near ${callsign(item)} dissipating.`, 'weather'));
     window.setTimeout(() => {
       storm.remove();
       if (item.stormEl === storm) item.stormEl = null;
@@ -816,6 +816,7 @@ function handleDecision(itemId, action, note) {
     fuel: item.fuel,
     waitMinutes: item.waitMinutes,
     mayday: item.mayday,
+    lowLogged: item.lowLogged,
     lastNote: item.lastNote,
     lastDecisionAt: item.lastDecisionAt,
     takenAt: now,
@@ -919,6 +920,7 @@ function undoDecision() {
   item.fuel = undo.fuel;
   item.waitMinutes = undo.waitMinutes;
   item.mayday = undo.mayday;
+  item.lowLogged = undo.lowLogged;
   item.lastNote = undo.lastNote || '';
   item.lastDecisionAt = undo.lastDecisionAt;
   item.parkBase = null;
@@ -1142,21 +1144,24 @@ function renderSummary(run, elapsed) {
   const scenario = state.scenario;
   dom.finishScenario.textContent = `${scenario.name} \u00B7 ${difficultyText(scenario)}`;
 
-  const earned = loadStore('medals', {});
+  const plain = value => (value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {});
+  const isNum = value => typeof value === 'number' && Number.isFinite(value);
+  const earned = plain(loadStore('medals', {}));
   const stamp = new Date().toISOString();
   const fresh = new Set();
   run.medals.forEach(id => {
-    if (!earned[id]) fresh.add(id);
-    earned[id] = { at: earned[id] ? earned[id].at : stamp, last: stamp, scenario: scenario.name, count: (earned[id] ? earned[id].count : 0) + 1 };
+    const prior = Object.hasOwn(earned, id) ? plain(earned[id]) : null;
+    if (!prior) fresh.add(id);
+    earned[id] = { at: prior && typeof prior.at === 'string' ? prior.at : stamp, last: stamp, scenario: scenario.name, count: (prior && isNum(prior.count) ? prior.count : 0) + 1 };
   });
   saveStore('medals', earned);
 
-  const runs = loadStore('runs', {});
-  const previous = runs[scenario.id];
+  const runs = plain(loadStore('runs', {}));
+  const previous = Object.hasOwn(runs, scenario.id) ? runs[scenario.id] : null;
   const current = { elapsedMs: Math.round(elapsed), landed: run.landed, sent: run.sent, best: run.best, medals: run.medals.length, at: stamp };
   runs[scenario.id] = current;
   saveStore('runs', runs);
-  if (previous) {
+  if (previous && isNum(previous.elapsedMs) && isNum(previous.best) && isNum(previous.medals)) {
     const diff = Math.round((elapsed - previous.elapsedMs) / 1000);
     const timeText = diff === 0 ? 'same time' : `${formatClock(Math.abs(diff) * 1000)} ${diff < 0 ? 'faster' : 'slower'}`;
     dom.finishCompare.textContent = `Previous run: ${formatClock(previous.elapsedMs)}, streak ${previous.best}, ${previous.medals} medal${previous.medals === 1 ? '' : 's'} \u00B7 this run ${timeText}, streak ${run.best >= previous.best ? '+' : '-'}${Math.abs(run.best - previous.best)}`;
@@ -1274,7 +1279,7 @@ function updateWindIndicator() {
   if (!wind) return;
   const arrow = makeEl('span', 'wind-arrow', '\u27A4');
   arrow.setAttribute('aria-hidden', 'true');
-  arrow.style.transform = `rotate(${wind.dir}deg)`;
+  arrow.style.transform = `rotate(${wind.dir - 90}deg)`;
   dom.windIndicator.appendChild(arrow);
   dom.windIndicator.appendChild(document.createTextNode(`Wind ${windText(wind)}`));
   dom.windIndicator.setAttribute('aria-label', `Wind toward ${windText(wind)}`);
@@ -1302,8 +1307,8 @@ function drawOverlay(now) {
   if (layers.wind && state.scenario.wind) {
     const wind = state.scenario.wind;
     const dir = (wind.dir * Math.PI) / 180;
-    const dx = Math.cos(dir);
-    const dy = Math.sin(dir);
+    const dx = Math.sin(dir);
+    const dy = -Math.cos(dir);
     const drift = prefersReducedMotion() ? 0 : ((now / 5000) % 1);
     ctx.lineWidth = 1;
     ctx.strokeStyle = 'rgba(123, 217, 255, 0.14)';
@@ -1468,7 +1473,7 @@ function syncLayerButtons() {
 dom.layerButtons.forEach(button => {
   button.addEventListener('click', () => {
     const layer = button.dataset.layer;
-    if (!(layer in state.layers)) return;
+    if (!Object.hasOwn(state.layers, layer)) return;
     state.layers[layer] = !state.layers[layer];
     saveStore('layers', state.layers);
     syncLayerButtons();

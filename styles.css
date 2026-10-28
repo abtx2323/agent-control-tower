@@ -481,21 +481,6 @@ h1 {
   flex-wrap: wrap;
 }
 
-.scenario-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.scenario-control select {
-  max-width: 180px;
-  padding: 0.48rem 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--text);
-  background: var(--bg-2);
-}
-
 .speed-toggle {
   display: flex;
   align-items: center;
@@ -523,28 +508,6 @@ h1 {
   background: linear-gradient(135deg, rgba(99, 242, 178, 0.92), rgba(123, 217, 255, 0.82));
 }
 
-.layer-toggle {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  justify-content: end;
-}
-
-.layer-toggle button {
-  padding: 0.35rem 0.6rem;
-  border: 1px solid rgba(123, 217, 255, 0.2);
-  border-radius: 999px;
-  color: var(--muted);
-  background: rgba(255,255,255,0.03);
-  font-size: 0.7rem;
-}
-
-.layer-toggle button[aria-pressed="true"] {
-  color: var(--cyan);
-  border-color: rgba(123, 217, 255, 0.55);
-  background: rgba(123, 217, 255, 0.1);
-}
-
 kbd {
   display: inline-block;
   margin-left: 4px;
@@ -566,7 +529,6 @@ kbd {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
   padding: 0 6px;
 }
 
@@ -589,11 +551,6 @@ kbd {
   box-shadow: inset 0 0 0 0 rgba(255, 70, 90, 0);
   transition: box-shadow 0.4s ease;
 }
-
-.radar-grid.hide-traffic .plane-layer { display: none; }
-.radar-grid.hide-weather .storm-layer { display: none; }
-.radar-grid.hide-rings .radar-ring,
-.radar-grid.hide-rings .radar-crosshair { display: none; }
 
 .radar-grid.is-mayday::after {
   animation: mayday-edge 0.9s ease-in-out infinite alternate;
@@ -873,52 +830,6 @@ kbd {
 
 .side-column { display: flex; flex-direction: column; gap: 16px; }
 
-.medal-panel {
-  padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(12, 29, 39, 0.94), rgba(8, 18, 25, 0.98));
-  box-shadow: var(--shadow);
-}
-
-.medal-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.medal-header h2 {
-  margin: 0;
-  color: var(--amber);
-  font-size: 0.8rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-.medal-list { display: grid; gap: 8px; }
-
-.medal {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  color: var(--muted);
-  background: rgba(255,255,255,0.02);
-}
-
-.medal--earned {
-  color: var(--text);
-  border-color: rgba(255, 203, 105, 0.35);
-  background: rgba(255, 203, 105, 0.07);
-}
-
-.medal-icon { color: var(--amber); font-size: 1.2rem; }
-.medal-copy { display: grid; gap: 2px; font-size: 0.75rem; }
-.medal-copy strong { color: inherit; }
-
 .run-meta { display: flex; flex-direction: column; align-items: end; gap: 6px; }
 
 .run-timer {
@@ -997,3 +908,89 @@ kbd {
   .radar-sweep { display: none; }
   .radar-grid.is-mayday::after { box-shadow: inset 0 0 50px 8px rgba(255, 70, 90, 0.5), inset 0 0 0 3px rgba(255, 104, 120, 0.9); }
 }
+
+/* ---------- scenarios, layers, medals, undo ---------- */
+
+.scenario-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scenario-picker select {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  color: var(--text);
+  background: rgba(255,255,255,0.05);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.scenario-picker select option { color: #05141c; }
+
+.trail-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  flex-wrap: wrap;
+}
+
+.layer-toggle .tile-label { margin-right: 6px; }
+
+.layer-toggle .speed-button[aria-pressed="false"] { text-decoration: line-through; }
+
+.wind-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cyan);
+}
+
+.wind-arrow {
+  display: inline-block;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.radio-line--undone .radio-text,
+.radio-line--undone .radio-speaker { text-decoration: line-through; opacity: 0.55; }
+
+.finish-card { max-height: 92%; overflow-y: auto; }
+.finish-scenario { margin: 0 0 6px; color: var(--cyan); font-weight: 700; }
+.finish-compare { margin: -8px 0 14px; color: var(--muted); font-size: 0.85rem; }
+
+.finish-medals {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.finish-medals li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 203, 105, 0.35);
+  background: rgba(255, 203, 105, 0.07);
+  font-size: 0.82rem;
+}
+
+.finish-medals .medal-icon { font-size: 1.3rem; }
+.finish-medals .medal-desc { color: var(--muted); display: block; font-size: 0.74rem; }
+.finish-medals .medal-new { margin-left: auto; color: var(--green); font-weight: 700; font-size: 0.7rem; }
+.finish-medals li.medal-none { border-color: var(--line); background: transparent; color: var(--muted); }

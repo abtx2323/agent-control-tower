@@ -93,7 +93,155 @@ const CONFIG = {
   defaultSpeed: 10
 };
 
+const STORAGE_PREFIX = 'agentControlTower.';
+
+const MEDALS = [
+  { id: 'perfect', icon: '\u{1F3AF}', name: 'Perfect Landing', desc: 'Land 3 in a row without sending around' },
+  { id: 'highFuel', icon: '\u{26FD}', name: 'High Fuel', desc: 'Finish a shift with every decision made above 80% fuel' },
+  { id: 'risky', icon: '\u{1F329}\uFE0F', name: 'Risky Business', desc: 'Land a plane in bad weather on low fuel' },
+  { id: 'speed', icon: '\u{26A1}', name: 'Speed Runner', desc: 'Land 5 planes in under 2 minutes' },
+  { id: 'noMayday', icon: '\u{1F9D8}', name: 'No Mayday', desc: 'Finish a shift without a single mayday' },
+  { id: 'streak', icon: '\u{1F525}', name: 'Streak Master', desc: 'Reach a streak of 5 decisions' }
+];
+
+const SCENARIO_POOLS = {
+  titles: {
+    pr: ['Refine agent handoff prompts', 'Add dependency update checks', 'Fix onboarding analytics report', 'Harden session token refresh',
+      'Cache radar geometry', 'Migrate billing webhooks', 'Rework feature flag loader', 'Patch markdown renderer', 'Trim CI matrix',
+      'Add audit log export', 'Upgrade build toolchain', 'Fix timezone drift in reports'],
+    draft: ['Customer wrap-up email', 'Launch-day social post', 'Decision memo for pricing', 'Status page update', 'Partner announcement',
+      'Incident summary for customers', 'Release notes blog post', 'Exec briefing note', 'Support macro refresh', 'Internal all-hands recap']
+  },
+  agents: {
+    pr: ['Copilot', 'Dependabot', 'Pine', 'Release Bot', 'Atlas'],
+    draft: ['Mila', 'Proxy', 'Nico', 'Scribe', 'Juno']
+  },
+  repos: {
+    pr: ['matchday-intelligence', 'demo-sandbox', 'sample-admin-tools', 'core-api', 'web-client'],
+    draft: ['Personal ops', 'Marketing sync', 'Strategy desk', 'Comms hub', 'Support desk']
+  },
+  stormNeeds: {
+    pr: ['security review'],
+    draft: ['approval to send', 'approval to publish', 'approval before sharing']
+  },
+  calmNeeds: {
+    pr: ['approve merge', 'approve rollout'],
+    draft: ['approval to file', 'approval to archive']
+  },
+  risks: {
+    low: [
+      'Looks routine; a quick skim is enough before it goes out.',
+      'Low blast radius, but confirm the checklist before approving.'
+    ],
+    high: [
+      'High blast radius: this touches a shared pipeline and deserves a careful read.',
+      'Sensitive wording or config in play; verify before it leaves the building.',
+      'Elevated risk: rollback would be painful if this slips through.'
+    ]
+  }
+};
+
+const SCENARIOS = [
+  {
+    id: 'classic', name: 'Classic Shift', difficulty: 1, blurb: 'The original six-plane sample queue.',
+    tankMinutes: 1200, wind: { dir: 200, strength: 0.4, knots: 8 }
+  },
+  {
+    id: 'launch', name: 'Launch Day', difficulty: 2, blurb: 'Heavy PR volume, some risky, moderate weather.',
+    seed: 1101, count: 10, prRatio: 0.8, stormChance: 0.25, riskChance: 0.35, waitMin: 60, waitMax: 800,
+    tankMinutes: 1200, wind: { dir: 300, strength: 0.5, knots: 12 }
+  },
+  {
+    id: 'critical', name: 'Critical Bug', difficulty: 3, blurb: 'Few urgent items, extreme weather, tanks nearly dry.',
+    seed: 2202, count: 4, prRatio: 0.75, stormChance: 0.75, riskChance: 0.8, waitMin: 400, waitMax: 650,
+    tankMinutes: 700, wind: { dir: 20, strength: 0.9, knots: 34 }
+  },
+  {
+    id: 'security', name: 'Security Incident', difficulty: 3, blurb: 'Drafts and PRs mixed, elevated risk, lots of outbound comms.',
+    seed: 3303, count: 8, prRatio: 0.5, stormChance: 0.6, riskChance: 0.6, waitMin: 120, waitMax: 900,
+    tankMinutes: 1000, wind: { dir: 110, strength: 0.7, knots: 22 }
+  },
+  {
+    id: 'allhands', name: 'All Hands Review', difficulty: 2, blurb: 'A balanced queue with every kind of agent.',
+    seed: 4404, count: 9, prRatio: 0.5, stormChance: 0.3, riskChance: 0.3, waitMin: 60, waitMax: 900,
+    tankMinutes: 1200, wind: { dir: 250, strength: 0.3, knots: 6 }
+  }
+];
+
+const DIFFICULTY_LABELS = ['', 'Easy', 'Medium', 'Hard'];
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function next() {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateRecords(spec) {
+  const rand = mulberry32(spec.seed);
+  const pick = list => list[Math.floor(rand() * list.length)];
+  const used = { pr: Math.floor(rand() * 100), draft: Math.floor(rand() * 100) };
+  const records = [];
+  for (let i = 0; i < spec.count; i += 1) {
+    const type = rand() < spec.prRatio ? 'pr' : 'draft';
+    const stormy = rand() < spec.stormChance;
+    const risky = rand() < spec.riskChance;
+    const titles = SCENARIO_POOLS.titles[type];
+    const title = titles[used[type]++ % titles.length];
+    const record = {
+      id: `${type}-${spec.seed % 1000 + i * 13 + Math.floor(rand() * 10)}`,
+      title,
+      type,
+      agent: pick(SCENARIO_POOLS.agents[type]),
+      repo: pick(SCENARIO_POOLS.repos[type]),
+      needs: pick((stormy ? SCENARIO_POOLS.stormNeeds : SCENARIO_POOLS.calmNeeds)[type]),
+      minutesAgo: Math.round(spec.waitMin + rand() * (spec.waitMax - spec.waitMin)),
+      status: 'waiting',
+      risk: pick(SCENARIO_POOLS.risks[risky ? 'high' : 'low'])
+    };
+    if (type === 'draft') record.summary = `${title}, drafted by ${record.agent}.`;
+    records.push(record);
+  }
+  return records;
+}
+
+function getScenario(id) {
+  return SCENARIOS.find(scenario => scenario.id === id) || SCENARIOS[0];
+}
+
+function scenarioRecords(scenario) {
+  return scenario.seed == null ? getSeedData() : generateRecords(scenario);
+}
+
+function difficultyText(scenario) {
+  return `${'\u2605'.repeat(scenario.difficulty)}${'\u2606'.repeat(3 - scenario.difficulty)} ${DIFFICULTY_LABELS[scenario.difficulty]}`;
+}
+
+function loadStore(key, fallback) {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
+    return raw == null ? fallback : JSON.parse(raw);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function saveStore(key, value) {
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+  } catch (error) {
+    /* storage unavailable: keep running in memory */
+  }
+}
+
 const state = {
+  scenario: SCENARIOS[0],
+  undo: null,
+  layers: { trails: true, vectors: true, wind: true },
   items: [],
   selectedId: null,
   focusMode: false,
@@ -106,10 +254,6 @@ const state = {
   run: null,
   finished: false,
   landedCount: 0,
-  scenario: 'standard',
-  layers: { traffic: true, weather: true, rings: true },
-  medals: new Set(),
-  undoStack: [],
   detailRefs: null,
   focusRefs: null,
   textCache: new Map()
@@ -129,6 +273,14 @@ const dom = {
   finishCard: document.getElementById('finishCard'),
   finishTitle: document.getElementById('finishTitle'),
   finishStats: document.getElementById('finishStats'),
+  finishScenario: document.getElementById('finishScenario'),
+  finishCompare: document.getElementById('finishCompare'),
+  finishMedals: document.getElementById('finishMedals'),
+  scenarioSelect: document.getElementById('scenarioSelect'),
+  undoButton: document.getElementById('undoButton'),
+  trailCanvas: document.getElementById('trailCanvas'),
+  windIndicator: document.getElementById('windIndicator'),
+  layerButtons: Array.from(document.querySelectorAll('[data-layer]')),
   restartButton: document.getElementById('restartButton'),
   closeFinishButton: document.getElementById('closeFinishButton'),
   simClock: document.getElementById('simClock'),
@@ -139,12 +291,7 @@ const dom = {
   longestWait: document.getElementById('longestWait'),
   landedToday: document.getElementById('landedToday'),
   streakStat: document.getElementById('streakStat'),
-  speedButtons: Array.from(document.querySelectorAll('.speed-button')),
-  scenarioSelect: document.getElementById('scenarioSelect'),
-  undoButton: document.getElementById('undoButton'),
-  layerButtons: Array.from(document.querySelectorAll('[data-layer]')),
-  medalList: document.getElementById('medalList'),
-  medalCount: document.getElementById('medalCount')
+  speedButtons: Array.from(document.querySelectorAll('.speed-button[data-speed]'))
 };
 
 const reduceMotionQuery = typeof window.matchMedia === 'function'
@@ -164,18 +311,6 @@ function getSeedData() {
   } catch (error) {
     return FALLBACK_SEED;
   }
-}
-
-function getScenarioData() {
-  const records = getSeedData().map(record => ({ ...record }));
-  if (state.scenario === 'mayday' && records.length) {
-    records[0].minutesAgo = CONFIG.tankMinutes + 1;
-  } else if (state.scenario === 'weather') {
-    records.forEach(record => {
-      record.needs = `${record.needs || 'approval'} · security review`;
-    });
-  }
-  return records;
 }
 
 function clamp(value, min, max) {
@@ -210,6 +345,10 @@ function callsign(item) {
   const label = item.type === 'pr' ? 'PR' : 'Draft';
   const match = String(item.id).match(/(\d+)$/);
   return match ? `${label} ${match[1]}` : `${label} ${item.id}`;
+}
+
+function tankMinutes() {
+  return state.scenario.tankMinutes || CONFIG.tankMinutes;
 }
 
 function getWeather(record) {
@@ -266,7 +405,7 @@ function createItemFromRecord(raw, index, total) {
     const sent = new Date(raw.sentAt).getTime();
     if (Number.isFinite(sent)) waitMinutes = Math.max(0, (Date.now() - sent) / 60000);
   }
-  const fuel = clamp(100 - (waitMinutes / CONFIG.tankMinutes) * 100, 0, 100);
+  const fuel = clamp(100 - (waitMinutes / tankMinutes()) * 100, 0, 100);
   const weather = getWeather(raw);
   const startRadius = radiusForFuel(fuel);
   return {
@@ -293,7 +432,10 @@ function createItemFromRecord(raw, index, total) {
     opacity: 1,
     el: null,
     stormEl: null,
-    classKey: ''
+    classKey: '',
+    trail: [],
+    trailAt: 0,
+    undone: false
   };
 }
 
@@ -316,44 +458,10 @@ function findItem(id) {
 }
 
 function newRun() {
-  return { startedAt: null, streak: 0, best: 0, landed: 0, sent: 0, held: 0, lastDecisionAt: null };
-}
-
-const MEDALS = [
-  { id: 'first-landing', title: 'First touchdown', detail: 'Land your first plane.' },
-  { id: 'smooth-operator', title: 'Smooth operator', detail: 'Reach a three-decision streak.' },
-  { id: 'clear-skies', title: 'Clear skies', detail: 'Finish a shift with no planes in the air.' }
-];
-
-function renderMedals() {
-  dom.medalCount.textContent = `${state.medals.size} earned`;
-  dom.medalList.replaceChildren();
-  MEDALS.forEach(medal => {
-    const earned = state.medals.has(medal.id);
-    const badge = makeEl('div', `medal ${earned ? 'medal--earned' : ''}`);
-    badge.setAttribute('title', medal.detail);
-    badge.appendChild(makeEl('span', 'medal-icon', earned ? '★' : '☆'));
-    const text = makeEl('span', 'medal-copy');
-    text.appendChild(makeEl('strong', '', medal.title));
-    text.appendChild(makeEl('span', '', earned ? medal.detail : 'Not earned yet'));
-    badge.appendChild(text);
-    dom.medalList.appendChild(badge);
-  });
-}
-
-function awardMedal(id) {
-  if (state.medals.has(id)) return;
-  state.medals.add(id);
-  renderMedals();
-}
-
-function syncLayers() {
-  dom.radarGrid.classList.toggle('hide-traffic', !state.layers.traffic);
-  dom.radarGrid.classList.toggle('hide-weather', !state.layers.weather);
-  dom.radarGrid.classList.toggle('hide-rings', !state.layers.rings);
-  dom.layerButtons.forEach(button => {
-    button.setAttribute('aria-pressed', String(state.layers[button.dataset.layer]));
-  });
+  return {
+    startedAt: null, streak: 0, best: 0, landed: 0, sent: 0, held: 0, lastDecisionAt: null,
+    cleanLandings: 0, landTimes: [], minFuel: 100, maydays: 0, medals: []
+  };
 }
 
 /* ---------- radio log ---------- */
@@ -368,6 +476,15 @@ function radio(speaker, text, kind) {
     dom.radioLog.removeChild(dom.radioLog.firstChild);
   }
   dom.radioLog.scrollTop = dom.radioLog.scrollHeight;
+  return line;
+}
+
+function awardMedal(id) {
+  const run = state.run;
+  if (run.medals.includes(id)) return;
+  run.medals.push(id);
+  const medal = MEDALS.find(entry => entry.id === id);
+  radio('Tower', `Medal earned: ${medal.name}.`, 'ok');
 }
 
 /* ---------- positions ---------- */
@@ -375,7 +492,10 @@ function radio(speaker, text, kind) {
 function stormBend(item, radius) {
   if (!item.weather) return 0;
   const distance = (radius - item.stormRadius) / CONFIG.stormWidth;
-  return (CONFIG.stormClearance / Math.max(radius, 6)) * Math.exp(-distance * distance);
+  const wind = state.scenario.wind;
+  const angle = item.baseAngle + state.spin;
+  const windFactor = wind ? 1 + wind.strength * Math.cos((wind.dir * Math.PI) / 180 - angle) : 1;
+  return (CONFIG.stormClearance / Math.max(radius, 6)) * Math.exp(-distance * distance) * windFactor;
 }
 
 function approachPoint(item) {
@@ -494,7 +614,6 @@ function ensurePlaneElement(item) {
   button.addEventListener('click', () => selectPlane(item.id));
 
   item.el = button;
-  item.classKey = '';
   item.nameEl = name;
   item.flagEl = flag;
   dom.planeLayer.appendChild(button);
@@ -581,6 +700,10 @@ function touchdownFlash(point) {
   window.setTimeout(() => flash.remove(), 900);
 }
 
+function trackUndoLine(item, line) {
+  if (state.undo && state.undo.id === item.id) state.undo.lines.push(line);
+}
+
 function completeLanding(item) {
   item.anim = null;
   item.gone = true;
@@ -591,14 +714,14 @@ function completeLanding(item) {
   chip.appendChild(makeEl('span', 'landed-dot'));
   chip.appendChild(makeEl('span', '', `${item.agent} · ${callsign(item)}`));
   dom.landedRow.appendChild(chip);
-  radio('Tower', `${callsign(item)} on the ground. Welcome home, ${item.agent}.`, 'ok');
+  trackUndoLine(item, radio('Tower', `${callsign(item)} on the ground. Welcome home, ${item.agent}.`, 'ok'));
   if (item.id === state.selectedId) renderDetail();
 }
 
 function completeSendAround(item) {
   item.anim = null;
   item.fuel = 100;
-  radio(item.agent, `${callsign(item)} back on the outer ring, refueled, working on changes.`, 'agent');
+  trackUndoLine(item, radio(item.agent, `${callsign(item)} back on the outer ring, refueled, working on changes.`, 'agent'));
 }
 
 /* ---------- selection, focus ---------- */
@@ -677,28 +800,6 @@ function handleDecision(itemId, action, note) {
   if (!item || !isAirborne(item) || item.anim) return;
   const now = performance.now();
   const sign = callsign(item);
-  state.undoStack.push({
-    itemId,
-    item: {
-      status: item.status,
-      fuel: item.fuel,
-      hold: item.hold ? { ...item.hold } : null,
-      anim: item.anim ? { ...item.anim, from: item.anim.from ? { ...item.anim.from } : undefined } : null,
-      parkBase: item.parkBase,
-      gone: item.gone,
-      mayday: item.mayday,
-      lowLogged: item.lowLogged,
-      maydayLogged: item.maydayLogged,
-      lastNote: item.lastNote,
-      lastDecisionAt: item.lastDecisionAt
-    },
-    run: { ...state.run },
-    landedCount: state.landedCount,
-    selectedId: state.selectedId,
-    finished: state.finished,
-    medals: [...state.medals]
-  });
-  dom.undoButton.disabled = false;
 
   const DEFAULT_NOTES = new Map([
     ['land', 'Approved and queued for merge/release.'],
@@ -708,6 +809,23 @@ function handleDecision(itemId, action, note) {
   const resultNote = note || DEFAULT_NOTES.get(action);
   if (!resultNote) return;
 
+  const snapshot = {
+    id: item.id,
+    status: item.status,
+    hold: item.hold ? { ...item.hold } : null,
+    fuel: item.fuel,
+    waitMinutes: item.waitMinutes,
+    mayday: item.mayday,
+    lastNote: item.lastNote,
+    lastDecisionAt: item.lastDecisionAt,
+    takenAt: now,
+    landedCount: state.landedCount,
+    run: { ...state.run, landTimes: [...state.run.landTimes], medals: [...state.run.medals] },
+    lines: []
+  };
+  const decisionFuel = item.fuel;
+  const decisionWeather = item.weather;
+  const radioStart = dom.radioLog.children.length;
   item.lastNote = resultNote;
   item.lastDecisionAt = new Date().toISOString();
   const noteSuffix = note ? ` Note: "${note}"` : '';
@@ -719,7 +837,6 @@ function handleDecision(itemId, action, note) {
     item.anim = { type: 'land', start: now, from: { x: item.x, y: item.y }, touched: false };
     state.landedCount += 1;
     state.run.landed += 1;
-    awardMedal('first-landing');
     radio(`Tower → ${item.agent}`, `cleared to land, ${sign}.${noteSuffix}`, 'tower');
     radio(item.agent, `cleared to land, ${sign}. Wheels down.`, 'agent');
   } else if (action === 'change') {
@@ -741,6 +858,16 @@ function handleDecision(itemId, action, note) {
   if (action !== 'snooze') item.mayday = false;
 
   const run = state.run;
+  run.minFuel = Math.min(run.minFuel, decisionFuel);
+  if (action === 'land') {
+    run.cleanLandings += 1;
+    run.landTimes.push(now);
+    if (run.cleanLandings >= 3) awardMedal('perfect');
+    if (decisionWeather && decisionFuel < CONFIG.lowFuel) awardMedal('risky');
+    if (run.landTimes.length >= 5 && now - run.landTimes[run.landTimes.length - 5] <= 120000) awardMedal('speed');
+  } else if (action === 'change') {
+    run.cleanLandings = 0;
+  }
   if (run.startedAt == null) run.startedAt = now;
   run.streak = run.lastDecisionAt != null && now - run.lastDecisionAt <= CONFIG.streakWindowMs ? run.streak + 1 : 1;
   run.best = Math.max(run.best, run.streak);
@@ -748,7 +875,11 @@ function handleDecision(itemId, action, note) {
   if (run.streak >= 3 && run.streak === run.best) {
     radio('Tower', `${run.streak} in a row. Smooth operating.`, 'ok');
   }
-  if (run.streak >= 3) awardMedal('smooth-operator');
+  if (run.best >= 5) awardMedal('streak');
+
+  const added = Array.from(dom.radioLog.children).slice(radioStart);
+  snapshot.lines = added;
+  state.undo = snapshot;
 
   if (state.focusMode) {
     const queue = getQueue();
@@ -760,38 +891,69 @@ function handleDecision(itemId, action, note) {
   renderFocus();
   updateFocusButton();
   updateStats(now);
+  updateUndoButton();
+}
+
+function canUndo() {
+  const undo = state.undo;
+  if (!undo || state.finished) return false;
+  const item = findItem(undo.id);
+  return Boolean(item) && !item.undone;
+}
+
+function updateUndoButton() {
+  dom.undoButton.classList.toggle('hidden', !canUndo());
 }
 
 function undoDecision() {
-  const previous = state.undoStack.pop();
-  if (!previous) return;
-  const item = findItem(previous.itemId);
-  if (!item) return;
-  Object.assign(item, previous.item);
-  state.run = previous.run;
-  state.landedCount = previous.landedCount;
-  state.selectedId = previous.selectedId;
-  state.finished = previous.finished;
-  state.medals = new Set(previous.medals);
-  const chip = Array.from(dom.landedRow.children).find(child => child.dataset.id === item.id);
-  if (chip) chip.remove();
-  if (item.stormEl) {
-    item.stormEl.remove();
-    item.stormEl = null;
+  if (!canUndo()) return;
+  const undo = state.undo;
+  const item = findItem(undo.id);
+  const now = performance.now();
+  const sign = callsign(item);
+
+  item.undone = true;
+  item.anim = null;
+  item.status = undo.status;
+  item.hold = undo.hold ? { ...undo.hold, start: undo.hold.start + (now - undo.takenAt), until: undo.hold.until + (now - undo.takenAt) } : null;
+  item.fuel = undo.fuel;
+  item.waitMinutes = undo.waitMinutes;
+  item.mayday = undo.mayday;
+  item.lastNote = undo.lastNote || '';
+  item.lastDecisionAt = undo.lastDecisionAt;
+  item.parkBase = null;
+  item.classKey = '';
+  state.landedCount = undo.landedCount;
+  undo.run.maydays = state.run.maydays;
+  state.run = undo.run;
+
+  if (item.gone) {
+    item.gone = false;
+    dom.landedRow.querySelectorAll('.landed-chip').forEach(chip => {
+      if (chip.dataset.id === item.id) chip.remove();
+    });
   }
-  if (!item.gone) ensurePlaneElement(item);
-  ensureStormElement(item);
-  updateItemPosition(item, performance.now());
+  if (item.weather) {
+    if (item.stormEl && item.stormEl.classList.contains('is-clearing')) {
+      item.stormEl.remove();
+      item.stormEl = null;
+    }
+    ensureStormElement(item);
+  }
+  ensurePlaneElement(item);
+  item.trail = [];
+  undo.lines.forEach(line => line.classList.add('radio-line--undone'));
+  radio('Tower', `Disregard, ${sign}. Last decision withdrawn.`, 'alert');
+  state.undo = null;
+
+  state.selectedId = item.id;
+  updateItemPosition(item, now);
   syncPlane(item);
-  syncStorm(item);
-  dom.finishCard.classList.add('hidden');
-  dom.undoButton.disabled = state.undoStack.length === 0;
-  renderMedals();
-  radio('Tower', `Undid the last decision for ${callsign(item)}.`, 'tower');
   renderDetail();
   renderFocus();
   updateFocusButton();
-  updateStats(performance.now());
+  updateStats(now);
+  updateUndoButton();
 }
 
 /* ---------- rendering: detail and focus ---------- */
@@ -976,21 +1138,67 @@ function updateLive(now, force) {
 
 /* ---------- finish and reset ---------- */
 
+function renderSummary(run, elapsed) {
+  const scenario = state.scenario;
+  dom.finishScenario.textContent = `${scenario.name} \u00B7 ${difficultyText(scenario)}`;
+
+  const earned = loadStore('medals', {});
+  const stamp = new Date().toISOString();
+  const fresh = new Set();
+  run.medals.forEach(id => {
+    if (!earned[id]) fresh.add(id);
+    earned[id] = { at: earned[id] ? earned[id].at : stamp, last: stamp, scenario: scenario.name, count: (earned[id] ? earned[id].count : 0) + 1 };
+  });
+  saveStore('medals', earned);
+
+  const runs = loadStore('runs', {});
+  const previous = runs[scenario.id];
+  const current = { elapsedMs: Math.round(elapsed), landed: run.landed, sent: run.sent, best: run.best, medals: run.medals.length, at: stamp };
+  runs[scenario.id] = current;
+  saveStore('runs', runs);
+  if (previous) {
+    const diff = Math.round((elapsed - previous.elapsedMs) / 1000);
+    const timeText = diff === 0 ? 'same time' : `${formatClock(Math.abs(diff) * 1000)} ${diff < 0 ? 'faster' : 'slower'}`;
+    dom.finishCompare.textContent = `Previous run: ${formatClock(previous.elapsedMs)}, streak ${previous.best}, ${previous.medals} medal${previous.medals === 1 ? '' : 's'} \u00B7 this run ${timeText}, streak ${run.best >= previous.best ? '+' : '-'}${Math.abs(run.best - previous.best)}`;
+  } else {
+    dom.finishCompare.textContent = 'First run on this scenario. This is your personal best to beat.';
+  }
+
+  dom.finishMedals.replaceChildren();
+  MEDALS.filter(medal => run.medals.includes(medal.id)).forEach(medal => {
+    const entry = makeEl('li');
+    const icon = makeEl('span', 'medal-icon', medal.icon);
+    icon.setAttribute('aria-hidden', 'true');
+    const label = makeEl('span', '', medal.name);
+    label.appendChild(makeEl('span', 'medal-desc', medal.desc));
+    entry.appendChild(icon);
+    entry.appendChild(label);
+    if (fresh.has(medal.id)) entry.appendChild(makeEl('span', 'medal-new', 'NEW'));
+    dom.finishMedals.appendChild(entry);
+  });
+  if (!run.medals.length) dom.finishMedals.appendChild(makeEl('li', 'medal-none', 'No medals this time. Try a longer streak or a cleaner approach.'));
+  const total = Object.keys(earned).length;
+  dom.finishMedals.appendChild(makeEl('li', 'medal-none', `Collection: ${total} of ${MEDALS.length} medals`));
+}
+
 function checkFinish(now) {
   if (state.finished || !state.items.length) return;
   if (state.items.some(isAirborne)) return;
   if (state.items.some(item => item.anim && item.anim.type === 'land')) return;
   state.finished = true;
   state.focusMode = false;
-  awardMedal('clear-skies');
   const run = state.run;
   const elapsed = now - (run.startedAt == null ? state.sessionStart : run.startedAt);
   dom.finishTitle.textContent = `Skies cleared in ${formatClock(elapsed)}`;
+  if (run.minFuel > 80 && run.landed + run.sent + run.held > 0) awardMedal('highFuel');
+  if (run.maydays === 0) awardMedal('noMayday');
+  renderSummary(run, elapsed);
   dom.finishStats.textContent = `${run.landed} landed · ${run.sent} sent around · ${run.held} hold${run.held === 1 ? '' : 's'} · best streak ${run.best}`;
   dom.finishCard.classList.remove('hidden');
   radio('Tower', `All stations, skies are clear. Shift complete in ${formatClock(elapsed)}.`, 'ok');
   renderFocus();
   updateFocusButton();
+  updateUndoButton();
 }
 
 function resetShift(startRun) {
@@ -1005,7 +1213,9 @@ function resetShift(startRun) {
   dom.finishCard.classList.add('hidden');
   state.textCache.clear();
 
-  const records = getScenarioData();
+  const records = scenarioRecords(state.scenario);
+  state.undo = null;
+  updateWindIndicator();
   state.items = records.map((record, index) => createItemFromRecord(record, index, records.length));
   state.simMinutes = 0;
   state.spin = 0;
@@ -1013,14 +1223,10 @@ function resetShift(startRun) {
   state.finished = false;
   state.focusMode = false;
   state.landedCount = 0;
-  state.undoStack = [];
-  dom.undoButton.disabled = true;
-  state.medals = new Set();
-  renderMedals();
-  syncLayers();
   state.selectedId = getQueue()[0]?.id || null;
 
   radio('Tower', `Control Tower online. ${state.items.length} inbound, runway 27 active.`, 'tower');
+  radio('Tower', `Scenario ${state.scenario.name} (${DIFFICULTY_LABELS[state.scenario.difficulty]}): ${state.scenario.blurb}`, 'tower');
   const now = performance.now();
   state.items.forEach(item => {
     ensurePlaneElement(item);
@@ -1036,8 +1242,119 @@ function resetShift(startRun) {
   renderDetail();
   updateFocusButton();
   updateStats(now);
+  updateUndoButton();
   if (startRun) enterFocus();
   else renderFocus();
+}
+
+/* ---------- radar overlay: trails, approach vectors, wind ---------- */
+
+const TRAIL_LENGTH = 8;
+const TRAIL_INTERVAL_MS = 140;
+
+function sampleTrail(item, now, reduce) {
+  if (item.gone) {
+    if (item.trail.length) item.trail = [];
+    return;
+  }
+  if (!reduce && now - item.trailAt < TRAIL_INTERVAL_MS) return;
+  item.trailAt = now;
+  item.trail.push({ x: item.x, y: item.y });
+  if (item.trail.length > TRAIL_LENGTH) item.trail.shift();
+}
+
+function windText(wind) {
+  return `${String(Math.round(wind.dir)).padStart(3, '0')}\u00B0 \u00B7 ${wind.knots} kt`;
+}
+
+function updateWindIndicator() {
+  const wind = state.scenario.wind;
+  dom.windIndicator.replaceChildren();
+  dom.windIndicator.classList.toggle('hidden', !state.layers.wind || !wind);
+  if (!wind) return;
+  const arrow = makeEl('span', 'wind-arrow', '\u27A4');
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.style.transform = `rotate(${wind.dir}deg)`;
+  dom.windIndicator.appendChild(arrow);
+  dom.windIndicator.appendChild(document.createTextNode(`Wind ${windText(wind)}`));
+  dom.windIndicator.setAttribute('aria-label', `Wind toward ${windText(wind)}`);
+}
+
+function drawOverlay(now) {
+  const canvas = dom.trailCanvas;
+  if (!canvas || typeof canvas.getContext !== 'function') return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const ratio = window.devicePixelRatio || 1;
+  const w = dom.radarGrid.clientWidth;
+  const h = dom.radarGrid.clientHeight;
+  const pw = Math.round(w * ratio);
+  const ph = Math.round(h * ratio);
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw;
+    canvas.height = ph;
+  }
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const px = point => [(point.x / 100) * w, (point.y / 100) * h];
+  const layers = state.layers;
+
+  if (layers.wind && state.scenario.wind) {
+    const wind = state.scenario.wind;
+    const dir = (wind.dir * Math.PI) / 180;
+    const dx = Math.cos(dir);
+    const dy = Math.sin(dir);
+    const drift = prefersReducedMotion() ? 0 : ((now / 5000) % 1);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(123, 217, 255, 0.14)';
+    for (let k = 0; k < 8; k += 1) {
+      const bx = 0.12 + ((k * 0.37) % 0.76);
+      const by = 0.1 + ((k * 0.53) % 0.8);
+      const offset = (drift + k / 8) % 1;
+      const sx = (bx + dx * (offset - 0.5) * 0.12) * w;
+      const sy = (by + dy * (offset - 0.5) * 0.12) * h;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + dx * w * 0.05 * wind.strength * 2, sy + dy * h * 0.05 * wind.strength * 2);
+      ctx.stroke();
+    }
+  }
+
+  if (layers.vectors) {
+    const { final, threshold } = runwayPoints();
+    const [fx, fy] = px(final);
+    const [tx, ty] = px(threshold);
+    ctx.setLineDash([4, 6]);
+    ctx.lineWidth = 1;
+    state.items.forEach(item => {
+      if (item.gone || item.anim || !isAirborne(item)) return;
+      const [x, y] = px(item);
+      ctx.strokeStyle = item.id === state.selectedId ? 'rgba(99, 242, 178, 0.45)' : 'rgba(99, 242, 178, 0.13)';
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(fx, fy, tx, ty);
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+  }
+
+  if (layers.trails) {
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = 'round';
+    state.items.forEach(item => {
+      const trail = item.trail;
+      if (item.gone || trail.length < 2) return;
+      for (let i = 1; i < trail.length; i += 1) {
+        const [x0, y0] = px(trail[i - 1]);
+        const [x1, y1] = px(trail[i]);
+        ctx.strokeStyle = `rgba(123, 217, 255, ${((i / trail.length) * 0.4).toFixed(3)})`;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+    });
+  }
 }
 
 /* ---------- simulation loop ---------- */
@@ -1063,7 +1380,7 @@ function tick(now) {
   state.items.forEach(item => {
     if (isAirborne(item)) {
       item.waitMinutes += simDelta;
-      item.fuel = Math.max(0, item.fuel - (simDelta / CONFIG.tankMinutes) * 100);
+      item.fuel = Math.max(0, item.fuel - (simDelta / tankMinutes()) * 100);
 
       if (item.fuel < CONFIG.lowFuel && !item.lowLogged) {
         item.lowLogged = true;
@@ -1073,6 +1390,7 @@ function tick(now) {
       if (item.fuel <= 0 && !item.mayday) {
         item.mayday = true;
         structural = true;
+        state.run.maydays += 1;
         if (!item.maydayLogged) {
           item.maydayLogged = true;
           radio(item.agent, `MAYDAY MAYDAY MAYDAY, ${callsign(item)}, fuel exhausted!`, 'mayday');
@@ -1101,7 +1419,9 @@ function tick(now) {
       syncPlane(item);
     }
     syncStorm(item);
+    sampleTrail(item, now, reduce);
   });
+  drawOverlay(now);
 
   if (structural) {
     const typing = document.activeElement && document.activeElement.id === 'decisionNote';
@@ -1125,6 +1445,37 @@ dom.focusButton.addEventListener('click', () => {
 
 dom.nextFocusButton.addEventListener('click', nextFocus);
 
+dom.undoButton.addEventListener('click', undoDecision);
+
+SCENARIOS.forEach(scenario => {
+  const option = makeEl('option', '', `${scenario.name} \u00B7 ${DIFFICULTY_LABELS[scenario.difficulty]}`);
+  option.value = scenario.id;
+  dom.scenarioSelect.appendChild(option);
+});
+dom.scenarioSelect.addEventListener('change', () => {
+  state.scenario = getScenario(dom.scenarioSelect.value);
+  saveStore('scenario', state.scenario.id);
+  dom.scenarioSelect.blur();
+  resetShift(false);
+});
+
+function syncLayerButtons() {
+  dom.layerButtons.forEach(button => {
+    button.setAttribute('aria-pressed', String(Boolean(state.layers[button.dataset.layer])));
+  });
+}
+
+dom.layerButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const layer = button.dataset.layer;
+    if (!(layer in state.layers)) return;
+    state.layers[layer] = !state.layers[layer];
+    saveStore('layers', state.layers);
+    syncLayerButtons();
+    updateWindIndicator();
+  });
+});
+
 dom.restartButton.addEventListener('click', () => resetShift(true));
 dom.closeFinishButton.addEventListener('click', () => dom.finishCard.classList.add('hidden'));
 
@@ -1137,22 +1488,6 @@ dom.speedButtons.forEach(button => {
     radio('Tower', `Sim clock set to ${speed}x.`, 'tower');
   });
 });
-
-dom.layerButtons.forEach(button => {
-  button.addEventListener('click', () => {
-    const layer = button.dataset.layer;
-    if (!Object.hasOwn(state.layers, layer)) return;
-    state.layers[layer] = !state.layers[layer];
-    syncLayers();
-  });
-});
-
-dom.scenarioSelect.addEventListener('change', () => {
-  state.scenario = dom.scenarioSelect.value;
-  resetShift(false);
-});
-
-dom.undoButton.addEventListener('click', undoDecision);
 
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
@@ -1170,11 +1505,6 @@ document.addEventListener('keydown', event => {
     resetShift(true);
     return;
   }
-  if (key === 'u' && state.undoStack.length) {
-    event.preventDefault();
-    undoDecision();
-    return;
-  }
   if (key === 'f') {
     event.preventDefault();
     if (state.focusMode) exitFocus();
@@ -1186,6 +1516,11 @@ document.addEventListener('keydown', event => {
     nextFocus();
     return;
   }
+  if (key === 'u') {
+    event.preventDefault();
+    undoDecision();
+    return;
+  }
   const action = new Map([['l', 'land'], ['s', 'change'], ['h', 'snooze']]).get(key);
   if (!action) return;
   const item = state.focusMode ? getFocusTarget() : findItem(state.selectedId);
@@ -1195,6 +1530,15 @@ document.addEventListener('keydown', event => {
 });
 
 function bootstrap() {
+  const savedLayers = loadStore('layers', null);
+  if (savedLayers && typeof savedLayers === 'object') {
+    Object.keys(state.layers).forEach(key => {
+      if (typeof savedLayers[key] === 'boolean') state.layers[key] = savedLayers[key];
+    });
+  }
+  state.scenario = getScenario(loadStore('scenario', SCENARIOS[0].id));
+  dom.scenarioSelect.value = state.scenario.id;
+  syncLayerButtons();
   resetShift(false);
   window.requestAnimationFrame(tick);
 }

@@ -20,12 +20,21 @@
         </div>
 
         <div class="tower-actions">
+          <label class="scenario-control">
+            <span class="tile-label">Scenario</span>
+            <select id="scenarioSelect" aria-label="Choose a scenario">
+              <option value="standard">Standard traffic</option>
+              <option value="mayday">Mayday drill</option>
+              <option value="weather">Storm front</option>
+            </select>
+          </label>
           <div class="speed-toggle" role="group" aria-label="Simulation speed">
             <span class="tile-label">Sim speed</span>
             <button class="speed-button" type="button" data-speed="1" aria-pressed="false">1x</button>
             <button class="speed-button" type="button" data-speed="10" aria-pressed="true">10x</button>
             <button class="speed-button" type="button" data-speed="60" aria-pressed="false">60x</button>
           </div>
+          <button id="undoButton" class="ghost-button" type="button" disabled>Undo</button>
           <button id="focusButton" class="ghost-button" type="button">Clear the skies</button>
         </div>
       </header>
@@ -54,6 +63,11 @@
           <div class="radar-toolbar">
             <span class="tile-label">Radar <span id="simClock" class="sim-clock">T+0:00</span></span>
             <span id="weatherSummary" class="tile-label weather-summary"></span>
+            <div class="layer-toggle" role="group" aria-label="Radar layers">
+              <button type="button" data-layer="traffic" aria-pressed="true">Traffic</button>
+              <button type="button" data-layer="weather" aria-pressed="true">Weather</button>
+              <button type="button" data-layer="rings" aria-pressed="true">Range rings</button>
+            </div>
           </div>
 
           <div id="radarGrid" class="radar-grid" aria-label="Air traffic radar board">
@@ -112,6 +126,14 @@
               <p class="key-hints"><kbd>L</kbd> land <kbd>S</kbd> send around <kbd>H</kbd> hold <kbd>Esc</kbd> exit</p>
               <button id="nextFocusButton" class="secondary-button" type="button">Next low-fuel plane <kbd>N</kbd></button>
             </div>
+          </section>
+
+          <section class="medal-panel" aria-label="Medals">
+            <div class="medal-header">
+              <h2>Medals</h2>
+              <span id="medalCount" class="tile-label">0 earned</span>
+            </div>
+            <div id="medalList" class="medal-list"></div>
           </section>
 
           <div class="detail-panel">

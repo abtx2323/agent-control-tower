@@ -106,6 +106,10 @@ const state = {
   run: null,
   finished: false,
   landedCount: 0,
+  scenario: 'standard',
+  layers: { traffic: true, weather: true, rings: true },
+  medals: new Set(),
+  undoStack: [],
   detailRefs: null,
   focusRefs: null,
   textCache: new Map()
@@ -135,7 +139,12 @@ const dom = {
   longestWait: document.getElementById('longestWait'),
   landedToday: document.getElementById('landedToday'),
   streakStat: document.getElementById('streakStat'),
-  speedButtons: Array.from(document.querySelectorAll('.speed-button'))
+  speedButtons: Array.from(document.querySelectorAll('.speed-button')),
+  scenarioSelect: document.getElementById('scenarioSelect'),
+  undoButton: document.getElementById('undoButton'),
+  layerButtons: Array.from(document.querySelectorAll('[data-layer]')),
+  medalList: document.getElementById('medalList'),
+  medalCount: document.getElementById('medalCount')
 };
 
 const reduceMotionQuery = typeof window.matchMedia === 'function'
@@ -155,6 +164,18 @@ function getSeedData() {
   } catch (error) {
     return FALLBACK_SEED;
   }
+}
+
+function getScenarioData() {
+  const records = getSeedData().map(record => ({ ...record }));
+  if (state.scenario === 'mayday' && records.length) {
+    records[0].minutesAgo = CONFIG.tankMinutes + 1;
+  } else if (state.scenario === 'weather') {
+    records.forEach(record => {
+      record.needs = `${record.needs || 'approval'} · security review`;
+    });
+  }
+  return records;
 }
 
 function clamp(value, min, max) {
@@ -298,6 +319,43 @@ function newRun() {
   return { startedAt: null, streak: 0, best: 0, landed: 0, sent: 0, held: 0, lastDecisionAt: null };
 }
 
+const MEDALS = [
+  { id: 'first-landing', title: 'First touchdown', detail: 'Land your first plane.' },
+  { id: 'smooth-operator', title: 'Smooth operator', detail: 'Reach a three-decision streak.' },
+  { id: 'clear-skies', title: 'Clear skies', detail: 'Finish a shift with no planes in the air.' }
+];
+
+function renderMedals() {
+  dom.medalCount.textContent = `${state.medals.size} earned`;
+  dom.medalList.replaceChildren();
+  MEDALS.forEach(medal => {
+    const earned = state.medals.has(medal.id);
+    const badge = makeEl('div', `medal ${earned ? 'medal--earned' : ''}`);
+    badge.setAttribute('title', medal.detail);
+    badge.appendChild(makeEl('span', 'medal-icon', earned ? '★' : '☆'));
+    const text = makeEl('span', 'medal-copy');
+    text.appendChild(makeEl('strong', '', medal.title));
+    text.appendChild(makeEl('span', '', earned ? medal.detail : 'Not earned yet'));
+    badge.appendChild(text);
+    dom.medalList.appendChild(badge);
+  });
+}
+
+function awardMedal(id) {
+  if (state.medals.has(id)) return;
+  state.medals.add(id);
+  renderMedals();
+}
+
+function syncLayers() {
+  dom.radarGrid.classList.toggle('hide-traffic', !state.layers.traffic);
+  dom.radarGrid.classList.toggle('hide-weather', !state.layers.weather);
+  dom.radarGrid.classList.toggle('hide-rings', !state.layers.rings);
+  dom.layerButtons.forEach(button => {
+    button.setAttribute('aria-pressed', String(state.layers[button.dataset.layer]));
+  });
+}
+
 /* ---------- radio log ---------- */
 
 function radio(speaker, text, kind) {
@@ -436,6 +494,7 @@ function ensurePlaneElement(item) {
   button.addEventListener('click', () => selectPlane(item.id));
 
   item.el = button;
+  item.classKey = '';
   item.nameEl = name;
   item.flagEl = flag;
   dom.planeLayer.appendChild(button);
@@ -618,6 +677,28 @@ function handleDecision(itemId, action, note) {
   if (!item || !isAirborne(item) || item.anim) return;
   const now = performance.now();
   const sign = callsign(item);
+  state.undoStack.push({
+    itemId,
+    item: {
+      status: item.status,
+      fuel: item.fuel,
+      hold: item.hold ? { ...item.hold } : null,
+      anim: item.anim ? { ...item.anim, from: item.anim.from ? { ...item.anim.from } : undefined } : null,
+      parkBase: item.parkBase,
+      gone: item.gone,
+      mayday: item.mayday,
+      lowLogged: item.lowLogged,
+      maydayLogged: item.maydayLogged,
+      lastNote: item.lastNote,
+      lastDecisionAt: item.lastDecisionAt
+    },
+    run: { ...state.run },
+    landedCount: state.landedCount,
+    selectedId: state.selectedId,
+    finished: state.finished,
+    medals: [...state.medals]
+  });
+  dom.undoButton.disabled = false;
 
   const DEFAULT_NOTES = new Map([
     ['land', 'Approved and queued for merge/release.'],
@@ -638,6 +719,7 @@ function handleDecision(itemId, action, note) {
     item.anim = { type: 'land', start: now, from: { x: item.x, y: item.y }, touched: false };
     state.landedCount += 1;
     state.run.landed += 1;
+    awardMedal('first-landing');
     radio(`Tower → ${item.agent}`, `cleared to land, ${sign}.${noteSuffix}`, 'tower');
     radio(item.agent, `cleared to land, ${sign}. Wheels down.`, 'agent');
   } else if (action === 'change') {
@@ -666,6 +748,7 @@ function handleDecision(itemId, action, note) {
   if (run.streak >= 3 && run.streak === run.best) {
     radio('Tower', `${run.streak} in a row. Smooth operating.`, 'ok');
   }
+  if (run.streak >= 3) awardMedal('smooth-operator');
 
   if (state.focusMode) {
     const queue = getQueue();
@@ -677,6 +760,38 @@ function handleDecision(itemId, action, note) {
   renderFocus();
   updateFocusButton();
   updateStats(now);
+}
+
+function undoDecision() {
+  const previous = state.undoStack.pop();
+  if (!previous) return;
+  const item = findItem(previous.itemId);
+  if (!item) return;
+  Object.assign(item, previous.item);
+  state.run = previous.run;
+  state.landedCount = previous.landedCount;
+  state.selectedId = previous.selectedId;
+  state.finished = previous.finished;
+  state.medals = new Set(previous.medals);
+  const chip = Array.from(dom.landedRow.children).find(child => child.dataset.id === item.id);
+  if (chip) chip.remove();
+  if (item.stormEl) {
+    item.stormEl.remove();
+    item.stormEl = null;
+  }
+  if (!item.gone) ensurePlaneElement(item);
+  ensureStormElement(item);
+  updateItemPosition(item, performance.now());
+  syncPlane(item);
+  syncStorm(item);
+  dom.finishCard.classList.add('hidden');
+  dom.undoButton.disabled = state.undoStack.length === 0;
+  renderMedals();
+  radio('Tower', `Undid the last decision for ${callsign(item)}.`, 'tower');
+  renderDetail();
+  renderFocus();
+  updateFocusButton();
+  updateStats(performance.now());
 }
 
 /* ---------- rendering: detail and focus ---------- */
@@ -867,6 +982,7 @@ function checkFinish(now) {
   if (state.items.some(item => item.anim && item.anim.type === 'land')) return;
   state.finished = true;
   state.focusMode = false;
+  awardMedal('clear-skies');
   const run = state.run;
   const elapsed = now - (run.startedAt == null ? state.sessionStart : run.startedAt);
   dom.finishTitle.textContent = `Skies cleared in ${formatClock(elapsed)}`;
@@ -889,7 +1005,7 @@ function resetShift(startRun) {
   dom.finishCard.classList.add('hidden');
   state.textCache.clear();
 
-  const records = getSeedData();
+  const records = getScenarioData();
   state.items = records.map((record, index) => createItemFromRecord(record, index, records.length));
   state.simMinutes = 0;
   state.spin = 0;
@@ -897,6 +1013,11 @@ function resetShift(startRun) {
   state.finished = false;
   state.focusMode = false;
   state.landedCount = 0;
+  state.undoStack = [];
+  dom.undoButton.disabled = true;
+  state.medals = new Set();
+  renderMedals();
+  syncLayers();
   state.selectedId = getQueue()[0]?.id || null;
 
   radio('Tower', `Control Tower online. ${state.items.length} inbound, runway 27 active.`, 'tower');
@@ -1017,6 +1138,22 @@ dom.speedButtons.forEach(button => {
   });
 });
 
+dom.layerButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const layer = button.dataset.layer;
+    if (!Object.hasOwn(state.layers, layer)) return;
+    state.layers[layer] = !state.layers[layer];
+    syncLayers();
+  });
+});
+
+dom.scenarioSelect.addEventListener('change', () => {
+  state.scenario = dom.scenarioSelect.value;
+  resetShift(false);
+});
+
+dom.undoButton.addEventListener('click', undoDecision);
+
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
   const target = event.target;
@@ -1031,6 +1168,11 @@ document.addEventListener('keydown', event => {
   if (key === 'r' && state.finished) {
     event.preventDefault();
     resetShift(true);
+    return;
+  }
+  if (key === 'u' && state.undoStack.length) {
+    event.preventDefault();
+    undoDecision();
     return;
   }
   if (key === 'f') {

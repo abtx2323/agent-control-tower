@@ -42,6 +42,8 @@ All keys are listed under [Keyboard shortcuts](#keyboard-shortcuts).
 - **Tower radio.** A scrolling log of call-and-response radio lines for every decision, low-fuel call, mayday, weather change, hold and rejoin, sim speed change and landing run start (last 30 calls).
 - **Mayday mode.** A plane that hits 0% fuel declares an emergency. The radar edge pulses red, the plane gets a MAYDAY badge and it jumps to the top of the queue.
 - **Agent weather.** Requests that need a security review, or whose approval mentions sending, publishing or sharing, spawn storm cells on the radar. Planes route around them, and the detail card shows the weather.
+- **Scenarios and radar layers.** Choose standard traffic, a mayday drill or a storm front. Toggle traffic, weather and range rings independently; changing simulation speed does not affect their pressed states.
+- **Medals and undo.** Earn medals for your first landing, a three-decision streak and clearing the skies. Undo the most recent landing, send-around or holding decision with the Undo button or `U`.
 - Click any plane for details, risk notes and a decision note. Sample data is included, so it works right away without a connected account. Animations respect `prefers-reduced-motion`.
 
 ## Keyboard shortcuts
@@ -55,6 +57,7 @@ All keys are listed under [Keyboard shortcuts](#keyboard-shortcuts).
 | `N` | Next plane in the queue (starts focus mode if it is off) |
 | `Esc` | Exit focus mode, or close the finish card |
 | `R` | Run it again (on the finish screen) |
+| `U` | Undo the most recent decision |
 
 Keys are ignored while you type in the decision note box.
 

@@ -1,0 +1,13 @@
+# Secrets and local config: never commit these
+.env
+.env.*
+*.pem
+*.key
+
+# Tooling and OS noise
+node_modules/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
